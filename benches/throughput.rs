@@ -55,7 +55,7 @@ fn bench_throughput(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(10));
     group.sample_size(10);
 
-    let sizes = [1 << 20, 8 << 20, 64 << 20]; // 1MiB, 8MiB, 64MiB
+    let sizes = [4 << 10, 16 << 10, 512 << 10, 1 << 20]; // 4KiB, 16KiB, 512KiB, 1MiB
     let patterns = ["random", "all_lf", "all_cr", "crlf", "mixed"];
 
     for &size in &sizes {
@@ -84,8 +84,8 @@ fn bench_throughput(c: &mut Criterion) {
     group2.sample_size(10);
 
     let max_size = 64 << 20; // largest block to process (64MiB)
-    let chunk_sizes = [4 << 10, 8 << 10, 16 << 10, 32 << 10, 64 << 10, 128 << 10]; // 4K..128K
-                                                                                   // reuse the same patterns as above
+    let chunk_sizes = [8 << 10, 16 << 10, 32 << 10, 64 << 10, 128 << 10]; // 8K, 16K, 32K, 64K, 128K
+                                                                          // reuse the same patterns as above
     for &pattern in &patterns {
         let data = make_buffer(max_size, pattern);
         // precompute max chunk so we can allocate a single reusable output buffer

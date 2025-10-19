@@ -9,6 +9,8 @@
 //! buffer allocation and want to avoid intermediate copies. The convenience
 //! helpers (`normalize` / `normalize_str`) allocate an internal buffer sized
 //! to guarantee `normalize_chunk` cannot fail.
+use std::ptr;
+
 use memchr::memchr2;
 
 use crate::NormalizeChunkStatus;
@@ -61,46 +63,70 @@ pub fn normalize_chunk(
 
     loop {
         if let Some(i) = memchr2(b'\r', b'\n', &input[scan_pos..]).map(|i| i + scan_pos) {
-            if input[i] == b'\n' || (i + 1 < input.len() && input[i + 1] != b'\n') {
-                // We found:
-                // - a LF not preceeded by a CR, or
-                // - a CR not followed by a LF and not at the last position
-                let bytes_now = i - read_pos;
-                output[write_pos..write_pos + bytes_now]
-                    .copy_from_slice(&input[read_pos..read_pos + bytes_now]);
-                output[write_pos + bytes_now..write_pos + bytes_now + 2].copy_from_slice(b"\r\n");
-                read_pos = i + 1;
-                scan_pos = read_pos;
-                write_pos += bytes_now + 2;
-            } else if input[i] == b'\r' && i + 1 < input.len() {
-                // We found:
-                // - a CR followed by a LF
-                // Intentionally don't copy now — advance scan_pos to skip the CRLF
-                // so we'll include the CRLF in a later large bulk copy from read_pos.
-                scan_pos = i + 2;
-            } else if i + 1 == input.len() {
-                // We found:
-                // - a CR at the last position
-                let bytes_now = input.len() - read_pos;
-                output[write_pos..write_pos + bytes_now].copy_from_slice(&input[read_pos..]);
-                if is_last_chunk {
-                    // Last chunk: emit CRLF
-                    output[write_pos + bytes_now] = b'\n';
+            // SAFETY: i is in-bounds because it was found by memchr2.
+            let c = unsafe { input.get_unchecked(i) };
+            match (c, input.get(i + 1)) {
+                (b'\r', Some(b'\n')) => {
+                    // We found:
+                    // - a CR followed by a LF
+                    // Intentionally don't copy now — advance scan_pos to skip the CRLF
+                    // so we'll include the CRLF in a later large bulk copy from read_pos.
+                    scan_pos = i + 2;
+                }
+                (b'\r', Some(_)) | (b'\n', _) => {
+                    // We found:
+                    // - a LF not preceeded by a CR, or
+                    // - a CR not followed by a LF and not at the last position
+                    let bytes_now = i - read_pos;
+                    // SAFETY: read_pos..i is in-bounds because i was found by memchr2 and we've
+                    // established at the top that output is large enough for worst-case expansion.
+                    unsafe {
+                        ptr::copy_nonoverlapping(
+                            input.as_ptr().add(read_pos),
+                            output.as_mut_ptr().add(write_pos),
+                            bytes_now,
+                        );
+                        *output.get_unchecked_mut(write_pos + bytes_now) = b'\r';
+                        *output.get_unchecked_mut(write_pos + bytes_now + 1) = b'\n';
+                    }
+                    read_pos = i + 1;
+                    scan_pos = read_pos;
+                    write_pos += bytes_now + 2;
+                }
+                (b'\r', None) => {
+                    // We found:
+                    // - a CR at the last position
+                    let bytes_now = input.len() - read_pos;
+                    // SAFETY: read_pos..end is in-bounds because 0 <= read_pos <= end and we've
+                    // established at the top that output is large enough for worst-case expansion.
+                    unsafe {
+                        ptr::copy_nonoverlapping(
+                            input.as_ptr().add(read_pos),
+                            output.as_mut_ptr().add(write_pos),
+                            bytes_now,
+                        );
+                        *output.get_unchecked_mut(write_pos + bytes_now) = b'\n';
+                    }
                     break Ok(NormalizeChunkStatus {
-                        output_len: write_pos + bytes_now + 1,
-                        ended_with_cr: false,
+                        output_len: write_pos + bytes_now + usize::from(is_last_chunk),
+                        ended_with_cr: !is_last_chunk,
                     });
                 }
-                break Ok(NormalizeChunkStatus {
-                    output_len: write_pos + bytes_now,
-                    ended_with_cr: true,
-                });
+                _ => unreachable!("unreachable pattern match case"),
             }
         } else {
             // We found:
             // - the end of the input
             let bytes_now = input.len() - read_pos;
-            output[write_pos..write_pos + bytes_now].copy_from_slice(&input[read_pos..]);
+            // SAFETY: read_pos..end is in-bounds because 0 <= read_pos <= end and we've
+            // established at the top that output is large enough for worst-case expansion.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    input.as_ptr().add(read_pos),
+                    output.as_mut_ptr().add(write_pos),
+                    bytes_now,
+                );
+            }
             break Ok(NormalizeChunkStatus {
                 output_len: write_pos + bytes_now,
                 ended_with_cr: false,
