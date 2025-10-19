@@ -4,7 +4,7 @@ use crate::NormalizeChunkFn;
 
 pub mod crlf;
 
-pub struct NormalizingReader<R> {
+struct NormalizingReader<R> {
     fn_normalize_chunk: NormalizeChunkFn,
     inner: R,
     input_buf: Box<[u8]>,
