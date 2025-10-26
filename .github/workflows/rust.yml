@@ -17,8 +17,16 @@ jobs:
     - name: Check formatting
       run: cargo fmt --check
     - name: Build
-      run: cargo build --verbose
+      run: cargo build
     - name: Check docs
       run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: Install cargo-fuzz
+      run: cargo +nightly install cargo-fuzz
+    - name: Run fuzz tests
+      run: cargo +nightly fuzz run --release crlf -- -runs=1000000
