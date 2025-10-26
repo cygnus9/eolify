@@ -38,7 +38,21 @@ pub fn normalize_chunk(
 ) -> crate::Result<NormalizeChunkStatus> {
     // Worst case: every byte in input needs conversion, plus one extra byte for the
     // trailing CR from last chunk.
-    let output_required = input.len() * 2 + 1;
+    //
+    // Example worst-case scenarios:
+    // - input: "\n\n\n", preceded_by_cr: false, is_last_chunk: any   -> output: "\r\n\r\n\r\n"    (2n)
+    // - input: "\n\n\n", preceded_by_cr: true,  is_last_chunk: any   -> output:   "\n\r\n\r\n"    (2n - 1)
+    // - input: "\r\r\r", preceded_by_cr: false, is_last_chunk: false -> output:   "\r\n\r\n\r"    (2n - 1)
+    // - input: "\r\r\r", preceded_by_cr: true,  is_last_chunk: false -> output: "\n\r\n\r\n\r"    (2n)
+    // - input: "\r\r\r", preceded_by_cr: false, is_last_chunk: true  -> output:   "\r\n\r\n\r\n"  (2n)
+    // - input: "\r\r\r", preceded_by_cr: true,  is_last_chunk: true  -> output: "\n\r\n\r\n\r\n"  (2n + 1)
+    //
+    // So the only case where we need 2n + 1 bytes is when `preceded_by_cr` is true, the last byte is a `\r` and
+    // `is_last_chunk` is true. In all other cases, 2n bytes is sufficient. However, for simpliucity we'll only
+    // look at `is_last_chunk`. We could just require 2n + 1 bytes always, but that would be surprising for
+    // callers that intuitively expect 2n to be sufficient in all cases, or at least when not processing the
+    // last chunk.
+    let output_required = input.len() * 2 + usize::from(is_last_chunk);
     if output.len() < output_required {
         return Err(crate::Error::OutputBufferTooSmall {
             required: output_required,
