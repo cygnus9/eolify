@@ -59,6 +59,14 @@ pub fn normalize_chunk(
         });
     }
 
+    if input.is_empty() && !is_last_chunk {
+        // Special case: empty input and not last chunk
+        return Ok(NormalizeChunkStatus {
+            output_len: 0,
+            ended_with_cr: preceded_by_cr,
+        });
+    }
+
     let mut scan_pos = 0;
     let mut read_pos = 0;
     let mut write_pos = 0;
@@ -119,7 +127,9 @@ pub fn normalize_chunk(
                             output.as_mut_ptr().add(write_pos),
                             bytes_now,
                         );
-                        *output.get_unchecked_mut(write_pos + bytes_now) = b'\n';
+                        if is_last_chunk {
+                            *output.get_unchecked_mut(write_pos + bytes_now) = b'\n';
+                        }
                     }
                     break Ok(NormalizeChunkStatus {
                         output_len: write_pos + bytes_now + usize::from(is_last_chunk),

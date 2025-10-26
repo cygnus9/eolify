@@ -66,6 +66,20 @@ fn last_was_cr_and_next_is_not_lf_emits_lf() {
 }
 
 #[test]
+fn last_was_cr_and_empty_chunk_does_not_emit_lf_if_not_last() {
+    let (out, last) = run(b"", true, false);
+    assert_eq!(out, b"");
+    assert_eq!(last, true);
+}
+
+#[test]
+fn last_was_cr_and_empty_chunk_does_emit_lf_if_last() {
+    let (out, last) = run(b"", true, true);
+    assert_eq!(out, b"\n");
+    assert_eq!(last, false);
+}
+
+#[test]
 fn multiple_crs_and_crlf_mixed() {
     let (out, last) = run(b"\r\r\n", false, false);
     assert_eq!(out, b"\r\n\r\n");
