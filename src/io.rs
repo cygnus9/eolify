@@ -90,7 +90,6 @@ impl<R: Read> Read for NormalizingReader<R> {
     }
 }
 
-
 struct NormalizingWriter<W> {
     fn_normalize_chunk: NormalizeChunkFn,
     inner: W,
@@ -129,7 +128,7 @@ impl<W: Write> NormalizingWriter<W> {
             &this.input_buf[..this.input_pos],
             &mut this.output_buf,
             this.last_was_cr,
-            true,  // this is the last chunk
+            true, // this is the last chunk
         )
         .map_err(std::io::Error::other)?;
 
@@ -148,7 +147,8 @@ impl<W: Write> Write for NormalizingWriter<W> {
             let bytes_now = source_buf.len().min(self.input_buf.len() - self.input_pos);
             total_bytes += bytes_now;
 
-            self.input_buf[self.input_pos..self.input_pos + bytes_now].copy_from_slice(&source_buf[..bytes_now]);
+            self.input_buf[self.input_pos..self.input_pos + bytes_now]
+                .copy_from_slice(&source_buf[..bytes_now]);
             self.input_pos += bytes_now;
             source_buf = &source_buf[bytes_now..];
 
@@ -178,7 +178,7 @@ impl<W: Write> Write for NormalizingWriter<W> {
             &self.input_buf[..self.input_pos],
             &mut self.output_buf,
             self.last_was_cr,
-            false,  // flush is not neccesarily the end of stream
+            false, // flush is not neccesarily the end of stream
         )
         .map_err(std::io::Error::other)?;
 

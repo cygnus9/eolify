@@ -35,7 +35,7 @@ impl<R: Read> NormalizingReader<R> {
     }
 
     /// Consume the `NormalizingReader`, returning the underlying reader.
-    /// 
+    ///
     /// Note that there may be buffered bytes which are not re-acquired as part
     /// of this transition. It’s recommended to only call this function after EOF
     /// has been reached.
