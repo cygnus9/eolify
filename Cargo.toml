@@ -19,6 +19,7 @@ memchr = "2.7"
 
 [dev-dependencies]
 criterion = "0.7"
+proptest = "1.8.0"
 
 [[bench]]
 name = "throughput"
