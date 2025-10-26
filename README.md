@@ -16,12 +16,11 @@ where consistency and efficiency matter.
 
 ## Current status
 
-Currently supports: normalization to CRLF (`\r\n`) using a chunk based API or through a `Read` implementation.
+Currently supports: normalization to CRLF (`\r\n`) using a chunk based API or through a `Read` or `Write` implementation.
 
 ### Planned:
 
 * LF (`\n`) normalization
-* `Write`
 * `AsyncRead` / `AsyncWrite`
 
 ## Example

@@ -25,6 +25,20 @@ fn crlf_split_across_readers() {
 }
 
 #[test]
+fn crlf_split_across_three_readers() {
+    let readers = vec![
+        Cursor::new(b"\r".to_vec()),
+        Cursor::new(b"".to_vec()),
+        Cursor::new(b"\n".to_vec()),
+    ]
+    .into_iter();
+    let test_reader = TestReader::new(readers);
+    let nr = NormalizingReader::with_size(test_reader, 3);
+    let out = read_all(nr);
+    assert_eq!(out, b"\r\n".to_vec());
+}
+
+#[test]
 fn lone_lf_in_first_reader_converted_to_crlf() {
     let readers = vec![
         Cursor::new(b"line1\n".to_vec()),
