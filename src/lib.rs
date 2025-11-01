@@ -2,6 +2,9 @@
 
 use std::{fmt, string::FromUtf8Error};
 
+const CR: u8 = b'\r';
+const LF: u8 = b'\n';
+
 /// Status returned by `normalize_chunk` describing how many bytes were
 /// written and whether the chunk ended with a `\r`.
 #[derive(Debug, Clone, PartialEq, Eq)]

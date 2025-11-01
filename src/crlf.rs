@@ -13,7 +13,7 @@ use std::ptr;
 
 use memchr::memchr2;
 
-use crate::NormalizeChunkStatus;
+use crate::{NormalizeChunkStatus, CR, LF};
 
 /// Normalize a single chunk of input to CRLF into the provided `output` buffer.
 ///
@@ -71,7 +71,7 @@ pub fn normalize_chunk(
     let mut read_pos = 0;
     let mut write_pos = 0;
 
-    if input.first() == Some(&b'\n') && preceded_by_cr {
+    if input.first() == Some(&LF) && preceded_by_cr {
         // We found:
         // - a LF preceeded by a CR from the previous chunk
         scan_pos = 1;
@@ -79,23 +79,23 @@ pub fn normalize_chunk(
         // We found:
         // - not a LF preceeded by a CR from the previous chunk, or
         // - empty input preceeded by a CR from the previous chunk
-        output[0] = b'\n';
+        output[0] = LF;
         write_pos = 1;
     }
 
     loop {
-        if let Some(i) = memchr2(b'\r', b'\n', &input[scan_pos..]).map(|i| i + scan_pos) {
+        if let Some(i) = memchr2(CR, LF, &input[scan_pos..]).map(|i| i + scan_pos) {
             // SAFETY: i is in-bounds because it was found by memchr2.
-            let c = unsafe { input.get_unchecked(i) };
-            match (c, input.get(i + 1)) {
-                (b'\r', Some(b'\n')) => {
+            let c = unsafe { *input.get_unchecked(i) };
+            match (c, input.get(i + 1).copied()) {
+                (CR, Some(LF)) => {
                     // We found:
                     // - a CR followed by a LF
                     // Intentionally don't copy now — advance scan_pos to skip the CRLF
                     // so we'll include the CRLF in a later large bulk copy from read_pos.
                     scan_pos = i + 2;
                 }
-                (b'\r', Some(_)) | (b'\n', _) => {
+                (CR, Some(_)) | (LF, _) => {
                     // We found:
                     // - a LF not preceeded by a CR, or
                     // - a CR not followed by a LF and not at the last position
@@ -108,14 +108,14 @@ pub fn normalize_chunk(
                             output.as_mut_ptr().add(write_pos),
                             bytes_now,
                         );
-                        *output.get_unchecked_mut(write_pos + bytes_now) = b'\r';
-                        *output.get_unchecked_mut(write_pos + bytes_now + 1) = b'\n';
+                        *output.get_unchecked_mut(write_pos + bytes_now) = CR;
+                        *output.get_unchecked_mut(write_pos + bytes_now + 1) = LF;
                     }
                     read_pos = i + 1;
                     scan_pos = read_pos;
                     write_pos += bytes_now + 2;
                 }
-                (b'\r', None) => {
+                (CR, None) => {
                     // We found:
                     // - a CR at the last position
                     let bytes_now = input.len() - read_pos;
@@ -128,7 +128,7 @@ pub fn normalize_chunk(
                             bytes_now,
                         );
                         if is_last_chunk {
-                            *output.get_unchecked_mut(write_pos + bytes_now) = b'\n';
+                            *output.get_unchecked_mut(write_pos + bytes_now) = LF;
                         }
                     }
                     break Ok(NormalizeChunkStatus {
