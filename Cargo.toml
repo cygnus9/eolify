@@ -15,12 +15,22 @@ High-performance line ending normalization for Rust.
 """
 
 [dependencies]
+futures-io = { version = "0.3.31", optional = true }
 memchr = "2.7"
+pin-project-lite = { version = "0.2.16", optional = true }
+tokio = { version = "1.48.0", default-features = false, optional = true }
 
 [dev-dependencies]
+async-std = { version = "1.12", features = ["attributes"] }
 criterion = "0.7"
+futures-util = { version = "0.3.31", default-features = false, features = ["io"] }
 proptest = "1.8.0"
+tokio = { version = "1.48.0", default-features = false, features = ["io-util", "macros", "rt"] }
 
 [[bench]]
 name = "throughput"
 harness = false
+
+[features]
+futures-io = ["dep:futures-io", "dep:pin-project-lite"]
+tokio-io = ["dep:tokio", "dep:pin-project-lite"]

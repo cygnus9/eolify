@@ -6,7 +6,7 @@ pub mod crlf;
 
 struct NormalizingReader<R> {
     fn_normalize_chunk: NormalizeChunkFn,
-    inner: R,
+    reader: R,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     output_pos: usize,
@@ -16,11 +16,11 @@ struct NormalizingReader<R> {
 }
 
 impl<R: Read> NormalizingReader<R> {
-    pub fn new(inner: R, fn_normalize_chunk: NormalizeChunkFn) -> Self {
-        Self::with_size(inner, fn_normalize_chunk, 8192)
+    fn new(reader: R, fn_normalize_chunk: NormalizeChunkFn) -> Self {
+        Self::with_size(reader, fn_normalize_chunk, 8192)
     }
 
-    pub fn with_size(inner: R, fn_normalize_chunk: NormalizeChunkFn, buf_size: usize) -> Self {
+    fn with_size(reader: R, fn_normalize_chunk: NormalizeChunkFn, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
         let Err(crate::Error::OutputBufferTooSmall { required }) =
             fn_normalize_chunk(&input_buf, &mut [], false, false)
@@ -29,7 +29,7 @@ impl<R: Read> NormalizingReader<R> {
         };
         Self {
             fn_normalize_chunk,
-            inner,
+            reader,
             input_buf,
             output_buf: vec![0; required].into_boxed_slice(),
             output_pos: 0,
@@ -47,7 +47,7 @@ impl<R: Read> NormalizingReader<R> {
             return Ok(());
         }
 
-        let bytes_read = self.inner.read(&mut self.input_buf)?;
+        let bytes_read = self.reader.read(&mut self.input_buf)?;
         let is_last_chunk = if bytes_read == 0 {
             self.end_of_stream = true;
             true
@@ -69,7 +69,7 @@ impl<R: Read> NormalizingReader<R> {
     }
 
     fn into_inner(self) -> R {
-        self.inner
+        self.reader
     }
 }
 

@@ -69,6 +69,8 @@ impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[cfg(any(feature = "futures-io", feature = "tokio-io"))]
+pub mod async_io;
 pub mod crlf;
 pub mod io;
 
