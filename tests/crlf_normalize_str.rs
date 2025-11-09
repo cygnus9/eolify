@@ -1,4 +1,4 @@
-use eolify::crlf::normalize_str;
+use eolify::core::crlf::normalize_str;
 
 fn run(input: &str) -> String {
     normalize_str(input)

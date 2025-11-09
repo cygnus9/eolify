@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use eolify::crlf;
+use eolify::core::crlf;
 use std::time::Duration;
 
 /// Generate buffers with a few different patterns:

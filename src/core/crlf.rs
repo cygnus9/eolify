@@ -13,7 +13,7 @@ use std::ptr;
 
 use memchr::memchr2;
 
-use crate::{NormalizeChunkStatus, CR, LF};
+use crate::core::{Error, NormalizeChunkStatus, Result, CR, LF};
 
 /// Normalize a single chunk of input to CRLF into the provided `output` buffer.
 ///
@@ -35,7 +35,7 @@ pub fn normalize_chunk(
     output: &mut [u8],
     preceded_by_cr: bool,
     is_last_chunk: bool,
-) -> crate::Result<NormalizeChunkStatus> {
+) -> Result<NormalizeChunkStatus> {
     // Worst case: every byte in input needs conversion, plus one extra byte for the
     // trailing CR from last chunk.
     //
@@ -54,17 +54,14 @@ pub fn normalize_chunk(
     // last chunk.
     let output_required = input.len() * 2 + usize::from(is_last_chunk);
     if output.len() < output_required {
-        return Err(crate::Error::OutputBufferTooSmall {
+        return Err(Error::OutputBufferTooSmall {
             required: output_required,
         });
     }
 
     if input.is_empty() && !is_last_chunk {
         // Special case: empty input and not last chunk
-        return Ok(NormalizeChunkStatus {
-            output_len: 0,
-            ended_with_cr: preceded_by_cr,
-        });
+        return Ok(NormalizeChunkStatus::new(0, preceded_by_cr));
     }
 
     let mut scan_pos = 0;
@@ -131,10 +128,10 @@ pub fn normalize_chunk(
                             *output.get_unchecked_mut(write_pos + bytes_now) = LF;
                         }
                     }
-                    break Ok(NormalizeChunkStatus {
-                        output_len: write_pos + bytes_now + usize::from(is_last_chunk),
-                        ended_with_cr: !is_last_chunk,
-                    });
+                    break Ok(NormalizeChunkStatus::new(
+                        write_pos + bytes_now + usize::from(is_last_chunk),
+                        !is_last_chunk,
+                    ));
                 }
                 _ => unreachable!("unreachable pattern match case"),
             }
@@ -151,10 +148,7 @@ pub fn normalize_chunk(
                     bytes_now,
                 );
             }
-            break Ok(NormalizeChunkStatus {
-                output_len: write_pos + bytes_now,
-                ended_with_cr: false,
-            });
+            break Ok(NormalizeChunkStatus::new(write_pos + bytes_now, false));
         }
     }
 }
@@ -165,7 +159,7 @@ pub fn normalize_chunk(
 /// enough to guarantee the chunk API cannot fail.
 #[must_use]
 pub fn normalize(input: &[u8]) -> Vec<u8> {
-    crate::normalize(input, normalize_chunk)
+    crate::core::normalize(input, normalize_chunk)
 }
 
 /// Normalize a UTF-8 string to CRLF and return an owned String.
@@ -174,5 +168,10 @@ pub fn normalize(input: &[u8]) -> Vec<u8> {
 /// preserves UTF-8 validity.
 #[must_use]
 pub fn normalize_str(input: &str) -> String {
-    crate::normalize_str(input, normalize)
+    crate::core::normalize_str(input, normalize)
+}
+
+pub struct Spec;
+impl crate::core::Spec for Spec {
+    const FN_NORMALIZE_CHUNK: crate::core::NormalizeChunkFn = normalize_chunk;
 }

@@ -1,11 +1,14 @@
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    marker::PhantomData,
+};
 
-use crate::NormalizeChunkFn;
+use crate::core::{Error, Spec};
 
 pub mod crlf;
 
-struct NormalizingReader<R> {
-    fn_normalize_chunk: NormalizeChunkFn,
+pub struct NormalizingReader<R, S> {
+    _phantom: PhantomData<S>,
     reader: R,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
@@ -15,20 +18,20 @@ struct NormalizingReader<R> {
     end_of_stream: bool,
 }
 
-impl<R: Read> NormalizingReader<R> {
-    fn new(reader: R, fn_normalize_chunk: NormalizeChunkFn) -> Self {
-        Self::with_size(reader, fn_normalize_chunk, 8192)
+impl<R: Read, S: Spec> NormalizingReader<R, S> {
+    pub fn new(reader: R) -> Self {
+        Self::with_size(reader, 8192)
     }
 
-    fn with_size(reader: R, fn_normalize_chunk: NormalizeChunkFn, buf_size: usize) -> Self {
+    pub fn with_size(reader: R, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let Err(crate::Error::OutputBufferTooSmall { required }) =
-            fn_normalize_chunk(&input_buf, &mut [], false, false)
+        let Err(Error::OutputBufferTooSmall { required }) =
+            S::FN_NORMALIZE_CHUNK(&input_buf, &mut [], false, false)
         else {
             unreachable!("output buffer should be too small when passing empty buffer");
         };
         Self {
-            fn_normalize_chunk,
+            _phantom: PhantomData,
             reader,
             input_buf,
             output_buf: vec![0; required].into_boxed_slice(),
@@ -55,7 +58,7 @@ impl<R: Read> NormalizingReader<R> {
             false
         };
 
-        let status = (self.fn_normalize_chunk)(
+        let status = S::FN_NORMALIZE_CHUNK(
             &self.input_buf[..bytes_read],
             &mut self.output_buf,
             self.last_was_cr,
@@ -68,12 +71,12 @@ impl<R: Read> NormalizingReader<R> {
         Ok(())
     }
 
-    fn into_inner(self) -> R {
+    pub fn into_inner(self) -> R {
         self.reader
     }
 }
 
-impl<R: Read> Read for NormalizingReader<R> {
+impl<R: Read, S: Spec> Read for NormalizingReader<R, S> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.output_pos >= self.output_size {
             self.fill_buf()?;
@@ -90,8 +93,8 @@ impl<R: Read> Read for NormalizingReader<R> {
     }
 }
 
-struct NormalizingWriter<W> {
-    fn_normalize_chunk: NormalizeChunkFn,
+pub struct NormalizingWriter<W, S> {
+    _phantom: PhantomData<S>,
     inner: W,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
@@ -99,20 +102,20 @@ struct NormalizingWriter<W> {
     last_was_cr: bool,
 }
 
-impl<W: Write> NormalizingWriter<W> {
-    pub fn new(inner: W, fn_normalize_chunk: NormalizeChunkFn) -> Self {
-        Self::with_size(inner, fn_normalize_chunk, 8192)
+impl<W: Write, S: Spec> NormalizingWriter<W, S> {
+    pub fn new(inner: W) -> Self {
+        Self::with_size(inner, 8192)
     }
 
-    pub fn with_size(inner: W, fn_normalize_chunk: NormalizeChunkFn, buf_size: usize) -> Self {
+    pub fn with_size(inner: W, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let Err(crate::Error::OutputBufferTooSmall { required }) =
-            fn_normalize_chunk(&input_buf, &mut [], false, false)
+        let Err(Error::OutputBufferTooSmall { required }) =
+            S::FN_NORMALIZE_CHUNK(&input_buf, &mut [], false, false)
         else {
             unreachable!("output buffer should be too small when passing empty buffer");
         };
         Self {
-            fn_normalize_chunk,
+            _phantom: PhantomData,
             inner,
             input_buf,
             output_buf: vec![0; required].into_boxed_slice(),
@@ -121,10 +124,10 @@ impl<W: Write> NormalizingWriter<W> {
         }
     }
 
-    fn finish(self) -> std::io::Result<W> {
+    pub fn finish(self) -> std::io::Result<W> {
         let mut this = self;
         // Finalize any remaining input
-        let status = (this.fn_normalize_chunk)(
+        let status = S::FN_NORMALIZE_CHUNK(
             &this.input_buf[..this.input_pos],
             &mut this.output_buf,
             this.last_was_cr,
@@ -138,7 +141,7 @@ impl<W: Write> NormalizingWriter<W> {
     }
 }
 
-impl<W: Write> Write for NormalizingWriter<W> {
+impl<W: Write, S: Spec> Write for NormalizingWriter<W, S> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let mut source_buf = buf;
         let mut total_bytes = 0;
@@ -157,7 +160,7 @@ impl<W: Write> Write for NormalizingWriter<W> {
                 return Ok(total_bytes);
             }
 
-            let status = (self.fn_normalize_chunk)(
+            let status = S::FN_NORMALIZE_CHUNK(
                 &self.input_buf,
                 &mut self.output_buf,
                 self.last_was_cr,
@@ -174,7 +177,7 @@ impl<W: Write> Write for NormalizingWriter<W> {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        let status = (self.fn_normalize_chunk)(
+        let status = S::FN_NORMALIZE_CHUNK(
             &self.input_buf[..self.input_pos],
             &mut self.output_buf,
             self.last_was_cr,

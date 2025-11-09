@@ -1,4 +1,4 @@
-use eolify::crlf::normalize_chunk;
+use eolify::core::crlf::normalize_chunk;
 
 fn run(input: &[u8], preceded_by_cr: bool, is_last_chunk: bool) -> (Vec<u8>, bool) {
     let mut output = [0; 32];

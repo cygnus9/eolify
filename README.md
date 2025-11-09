@@ -25,7 +25,7 @@ Currently supports: normalization to CRLF (`\r\n`) using a chunk based API or th
 
 ## Example
 ```rust
-use eolify::crlf;
+use eolify::core::crlf;
 
 let text = "one\nline\r\ntwo\rthree";
 let normalized = crlf::normalize_str(text);

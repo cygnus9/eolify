@@ -1,4 +1,4 @@
-use eolify::crlf::normalize;
+use eolify::core::crlf::normalize;
 
 fn run(input: &[u8]) -> Vec<u8> {
     normalize(input)

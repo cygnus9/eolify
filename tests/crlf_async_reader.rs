@@ -1,115 +1,94 @@
-#![cfg(feature = "futures-io")]
+#![cfg(any(feature = "futures-io", feature = "tokio-io"))]
 
 use std::{
     pin::{pin, Pin},
     task::{Context, Poll},
 };
 
-use eolify::async_io::crlf::NormalizingReader;
-#[cfg(feature = "futures-io")]
-use futures_util::AsyncReadExt as _;
-#[cfg(feature = "tokio-io")]
-use tokio::io::AsyncReadExt as _;
+macro_rules! dual_test {
+    ($name:ident, $body:block) => {
+        mod $name {
+            use super::*;
 
-#[cfg(feature = "futures-io")]
-#[async_std::test]
-async fn crlf_split_across_readers() {
-    let readers = vec![b"foo\r".as_ref(), b"\nbar".as_ref()].into_iter();
-    let test_reader = AsyncTestReader::futures_new(readers);
-    let nr = NormalizingReader::futures_with_size(test_reader, 3);
-    let out = futures_read_all(nr).await;
-    assert_eq!(out, b"foo\r\nbar".to_vec());
+            #[cfg(feature = "futures-io")]
+            #[async_std::test]
+            async fn futures_io() {
+                use eolify::async_io::futures_io::crlf::NormalizingReader;
+                use futures_util::AsyncReadExt;
+
+                $body
+            }
+
+            #[cfg(feature = "tokio-io")]
+            #[tokio::test]
+            async fn tokio() {
+                use eolify::async_io::tokio::crlf::NormalizingReader;
+                use tokio::io::AsyncReadExt;
+
+                $body
+            }
+        }
+    };
 }
 
-#[cfg(feature = "tokio-io")]
-#[tokio::test]
-async fn crlf_split_across_readers_tokio() {
+dual_test!(crlf_split_across_readers, {
     let readers = vec![b"foo\r".as_ref(), b"\nbar".as_ref()].into_iter();
-    let test_reader = AsyncTestReader::tokio_new(readers);
-    let nr = NormalizingReader::tokio_with_size(test_reader, 3);
-    let out = tokio_read_all(nr).await;
-    assert_eq!(out, b"foo\r\nbar".to_vec());
-}
+    let test_reader = AsyncTestReader::new(readers);
+    let mut nr = NormalizingReader::with_size(test_reader, 3);
+    let mut out = Vec::new();
+    nr.read_to_end(&mut out).await.unwrap();
+    assert_eq!(out.as_slice(), b"foo\r\nbar");
+});
 
-#[cfg(feature = "futures-io")]
-#[async_std::test]
-async fn crlf_split_across_three_readers() {
+dual_test!(crlf_split_across_three_reader, {
     let readers = vec![b"\r".as_ref(), b"".as_ref(), b"\n".as_ref()].into_iter();
-    let test_reader = AsyncTestReader::futures_new(readers);
-    let nr = NormalizingReader::futures_with_size(test_reader, 3);
-    let out = futures_read_all(nr).await;
+    let test_reader = AsyncTestReader::new(readers);
+    let mut nr = NormalizingReader::with_size(test_reader, 3);
+    let mut out = Vec::new();
+    nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"\r\n".to_vec());
-}
+});
 
-#[cfg(feature = "futures-io")]
-#[async_std::test]
-async fn lone_lf_in_first_reader_converted_to_crlf() {
+dual_test!(lone_lf_in_first_reader_converted_to_crlf, {
     let readers = vec![b"line1\n".as_ref(), b"line2".as_ref()].into_iter();
-    let test_reader = AsyncTestReader::futures_new(readers);
-    let nr = NormalizingReader::futures_with_size(test_reader, 4);
-    let out = futures_read_all(nr).await;
+    let test_reader = AsyncTestReader::new(readers);
+    let mut nr = NormalizingReader::with_size(test_reader, 4);
+    let mut out = Vec::new();
+    nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"line1\r\nline2".to_vec());
-}
+});
 
-#[cfg(feature = "futures-io")]
-#[async_std::test]
-async fn multiple_crs_and_crlf_mixed_across_boundaries() {
+dual_test!(multiple_crs_and_crlf_mixed_across_boundaries, {
     let readers = vec![b"\r".as_ref(), b"\r\n".as_ref()].into_iter();
-    let test_reader = AsyncTestReader::futures_new(readers);
-    let nr = NormalizingReader::futures_with_size(test_reader, 2);
-    let out = futures_read_all(nr).await;
+    let test_reader = AsyncTestReader::new(readers);
+    let mut nr = NormalizingReader::with_size(test_reader, 2);
+    let mut out = Vec::new();
+    nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"\r\n\r\n".to_vec());
-}
+});
 
-#[cfg(feature = "futures-io")]
-#[async_std::test]
-async fn trailing_cr_at_eof_emits_crlf() {
+dual_test!(trailing_cr_at_eof_emits_crlf, {
     let readers = vec![b"foo\r".as_ref()].into_iter();
-    let test_reader = AsyncTestReader::futures_new(readers);
-    let nr = NormalizingReader::futures_with_size(test_reader, 4);
-    let out = futures_read_all(nr).await;
+    let test_reader = AsyncTestReader::new(readers);
+    let mut nr = NormalizingReader::with_size(test_reader, 4);
+    let mut out = Vec::new();
+    nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"foo\r\n".to_vec());
-}
+});
 
 pub struct AsyncTestReader<R, I> {
     readers: I,
     current: Option<R>,
 }
 
-#[cfg(feature = "futures-io")]
-impl<R: futures_io::AsyncRead, I: Iterator<Item = R>> AsyncTestReader<R, I> {
-    pub fn futures_new(mut readers: I) -> AsyncTestReader<R, I> {
+impl<R, I: Iterator<Item = R>> AsyncTestReader<R, I> {
+    pub fn new(mut readers: I) -> AsyncTestReader<R, I> {
         let current = readers.next();
         AsyncTestReader {
             readers: readers,
             current: current,
         }
     }
-}
-
-#[cfg(feature = "tokio-io")]
-impl<R: tokio::io::AsyncRead, I: Iterator<Item = R>> AsyncTestReader<R, I> {
-    pub fn tokio_new(mut readers: I) -> AsyncTestReader<R, I> {
-        let current = readers.next();
-        AsyncTestReader {
-            readers: readers,
-            current: current,
-        }
-    }
-}
-
-#[cfg(feature = "futures-io")]
-pub async fn futures_read_all<R: futures_io::AsyncRead + Unpin>(mut r: R) -> Vec<u8> {
-    let mut out = Vec::new();
-    r.read_to_end(&mut out).await.unwrap();
-    out
-}
-
-#[cfg(feature = "tokio-io")]
-pub async fn tokio_read_all<R: tokio::io::AsyncRead + Unpin>(mut r: R) -> Vec<u8> {
-    let mut out = Vec::new();
-    r.read_to_end(&mut out).await.unwrap();
-    out
 }
 
 #[cfg(feature = "futures-io")]

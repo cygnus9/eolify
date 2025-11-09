@@ -1,4 +1,4 @@
-use eolify::crlf::normalize_chunk;
+use eolify::core::crlf::normalize_chunk;
 use proptest::{arbitrary::any, collection::vec, prop_assert, proptest, test_runner::Config};
 
 proptest! {
