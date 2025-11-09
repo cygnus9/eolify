@@ -1,6 +1,6 @@
 #![no_main]
 
-use eolify::{crlf::normalize_chunk, Error};
+use eolify::core::{crlf::normalize_chunk, Error};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
