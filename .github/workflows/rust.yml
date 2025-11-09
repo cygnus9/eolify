@@ -21,7 +21,7 @@ jobs:
     - name: Check docs
       run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
     - name: Run tests
-      run: cargo test
+      run: cargo test --all-features
   fuzz:
     runs-on: ubuntu-latest
     steps:
