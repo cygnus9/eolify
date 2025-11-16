@@ -1,8 +1,11 @@
 use core::fmt;
 use std::string::FromUtf8Error;
 
-pub const CR: u8 = b'\r';
-pub const LF: u8 = b'\n';
+#[cfg(any(feature = "futures-io", feature = "tokio"))]
+pub(crate) mod async_io;
+
+pub(crate) const CR: u8 = b'\r';
+pub(crate) const LF: u8 = b'\n';
 
 /// Status returned by `normalize_chunk` describing how many bytes were
 /// written and whether the chunk ended with a `\r`.

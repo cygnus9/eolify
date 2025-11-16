@@ -1,4 +1,4 @@
-#![cfg(any(feature = "futures-io", feature = "tokio-io"))]
+#![cfg(any(feature = "futures-io", feature = "tokio"))]
 
 use std::{
     pin::{pin, Pin},
@@ -13,16 +13,16 @@ macro_rules! dual_test {
             #[cfg(feature = "futures-io")]
             #[async_std::test]
             async fn futures_io() {
-                use eolify::async_io::futures_io::crlf::NormalizingReader;
+                use eolify::futures_io::crlf::NormalizingReader;
                 use futures_util::AsyncReadExt;
 
                 $body
             }
 
-            #[cfg(feature = "tokio-io")]
+            #[cfg(feature = "tokio")]
             #[tokio::test]
             async fn tokio() {
-                use eolify::async_io::tokio::crlf::NormalizingReader;
+                use eolify::tokio::crlf::NormalizingReader;
                 use tokio::io::AsyncReadExt;
 
                 $body
@@ -121,7 +121,7 @@ impl<R: futures_io::AsyncRead + Unpin, I: Iterator<Item = R> + Unpin> futures_io
         }
     }
 }
-#[cfg(feature = "tokio-io")]
+#[cfg(feature = "tokio")]
 impl<R: tokio::io::AsyncRead + Unpin, I: Iterator<Item = R> + Unpin> tokio::io::AsyncRead
     for AsyncTestReader<R, I>
 {

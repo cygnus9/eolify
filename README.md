@@ -16,12 +16,14 @@ where consistency and efficiency matter.
 
 ## Current status
 
-Currently supports: normalization to CRLF (`\r\n`) using a chunk based API or through a `Read` or `Write` implementation.
+Currently supports: normalization to CRLF (`\r\n`) using:
+* a chunk based API*
+* synchronous `Read` or `Write` implementations.
+* asynchronous `AsyncRead` or `AsyncWrite` implements (both futures_io and tokio are supported).
 
 ### Planned:
 
 * LF (`\n`) normalization
-* `AsyncRead` / `AsyncWrite`
 
 ## Example
 ```rust
