@@ -1,7 +1,7 @@
-use eolify::core::crlf::normalize;
+use eolify::{Normalize, CRLF};
 
 fn run(input: &[u8]) -> Vec<u8> {
-    normalize(input)
+    CRLF::normalize(input)
 }
 
 #[test]

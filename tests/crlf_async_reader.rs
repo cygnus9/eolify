@@ -9,11 +9,12 @@ macro_rules! dual_test {
     ($name:ident, $body:block) => {
         mod $name {
             use super::*;
+            use eolify::CRLF;
 
             #[cfg(feature = "futures-io")]
             #[async_std::test]
             async fn futures_io() {
-                use eolify::futures_io::crlf::NormalizingReader;
+                use eolify::FuturesIoExt;
                 use futures_util::AsyncReadExt;
 
                 $body
@@ -22,7 +23,7 @@ macro_rules! dual_test {
             #[cfg(feature = "tokio")]
             #[tokio::test]
             async fn tokio() {
-                use eolify::tokio::crlf::NormalizingReader;
+                use eolify::TokioExt;
                 use tokio::io::AsyncReadExt;
 
                 $body
@@ -34,7 +35,7 @@ macro_rules! dual_test {
 dual_test!(crlf_split_across_readers, {
     let readers = vec![b"foo\r".as_ref(), b"\nbar".as_ref()].into_iter();
     let test_reader = AsyncTestReader::new(readers);
-    let mut nr = NormalizingReader::with_size(test_reader, 3);
+    let mut nr = CRLF::wrap_async_reader_with_buffer_size(test_reader, 3);
     let mut out = Vec::new();
     nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out.as_slice(), b"foo\r\nbar");
@@ -43,7 +44,7 @@ dual_test!(crlf_split_across_readers, {
 dual_test!(crlf_split_across_three_reader, {
     let readers = vec![b"\r".as_ref(), b"".as_ref(), b"\n".as_ref()].into_iter();
     let test_reader = AsyncTestReader::new(readers);
-    let mut nr = NormalizingReader::with_size(test_reader, 3);
+    let mut nr = CRLF::wrap_async_reader_with_buffer_size(test_reader, 3);
     let mut out = Vec::new();
     nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"\r\n".to_vec());
@@ -52,7 +53,7 @@ dual_test!(crlf_split_across_three_reader, {
 dual_test!(lone_lf_in_first_reader_converted_to_crlf, {
     let readers = vec![b"line1\n".as_ref(), b"line2".as_ref()].into_iter();
     let test_reader = AsyncTestReader::new(readers);
-    let mut nr = NormalizingReader::with_size(test_reader, 4);
+    let mut nr = CRLF::wrap_async_reader_with_buffer_size(test_reader, 4);
     let mut out = Vec::new();
     nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"line1\r\nline2".to_vec());
@@ -61,7 +62,7 @@ dual_test!(lone_lf_in_first_reader_converted_to_crlf, {
 dual_test!(multiple_crs_and_crlf_mixed_across_boundaries, {
     let readers = vec![b"\r".as_ref(), b"\r\n".as_ref()].into_iter();
     let test_reader = AsyncTestReader::new(readers);
-    let mut nr = NormalizingReader::with_size(test_reader, 2);
+    let mut nr = CRLF::wrap_async_reader_with_buffer_size(test_reader, 2);
     let mut out = Vec::new();
     nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"\r\n\r\n".to_vec());
@@ -70,7 +71,7 @@ dual_test!(multiple_crs_and_crlf_mixed_across_boundaries, {
 dual_test!(trailing_cr_at_eof_emits_crlf, {
     let readers = vec![b"foo\r".as_ref()].into_iter();
     let test_reader = AsyncTestReader::new(readers);
-    let mut nr = NormalizingReader::with_size(test_reader, 4);
+    let mut nr = CRLF::wrap_async_reader_with_buffer_size(test_reader, 4);
     let mut out = Vec::new();
     nr.read_to_end(&mut out).await.unwrap();
     assert_eq!(out, b"foo\r\n".to_vec());

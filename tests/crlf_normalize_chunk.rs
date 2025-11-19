@@ -1,8 +1,8 @@
-use eolify::core::crlf::normalize_chunk;
+use eolify::{Normalize, CRLF};
 
 fn run(input: &[u8], preceded_by_cr: bool, is_last_chunk: bool) -> (Vec<u8>, bool) {
     let mut output = [0; 32];
-    let status = normalize_chunk(input, &mut output, preceded_by_cr, is_last_chunk).unwrap();
+    let status = CRLF::normalize_chunk(input, &mut output, preceded_by_cr, is_last_chunk).unwrap();
     (
         output[..status.output_len()].to_vec(),
         status.ended_with_cr(),

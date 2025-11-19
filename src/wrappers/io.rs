@@ -3,13 +3,11 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::core::{Error, Spec};
+use crate::Normalize;
 
-pub mod crlf;
-
-pub struct NormalizingReader<R, S> {
-    _phantom: PhantomData<S>,
-    reader: R,
+pub struct Reader<R, N> {
+    _phantom: PhantomData<N>,
+    inner: R,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     output_pos: usize,
@@ -18,21 +16,13 @@ pub struct NormalizingReader<R, S> {
     end_of_stream: bool,
 }
 
-impl<R: Read, S: Spec> NormalizingReader<R, S> {
-    pub fn new(reader: R) -> Self {
-        Self::with_size(reader, 8192)
-    }
-
-    pub fn with_size(reader: R, buf_size: usize) -> Self {
+impl<R: Read, N: Normalize> Reader<R, N> {
+    pub fn new(reader: R, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let Err(Error::OutputBufferTooSmall { required }) =
-            S::FN_NORMALIZE_CHUNK(&input_buf, &mut [], false, false)
-        else {
-            unreachable!("output buffer should be too small when passing empty buffer");
-        };
+        let required = N::output_size_for(&input_buf);
         Self {
             _phantom: PhantomData,
-            reader,
+            inner: reader,
             input_buf,
             output_buf: vec![0; required].into_boxed_slice(),
             output_pos: 0,
@@ -50,7 +40,7 @@ impl<R: Read, S: Spec> NormalizingReader<R, S> {
             return Ok(());
         }
 
-        let bytes_read = self.reader.read(&mut self.input_buf)?;
+        let bytes_read = self.inner.read(&mut self.input_buf)?;
         let is_last_chunk = if bytes_read == 0 {
             self.end_of_stream = true;
             true
@@ -58,7 +48,7 @@ impl<R: Read, S: Spec> NormalizingReader<R, S> {
             false
         };
 
-        let status = S::FN_NORMALIZE_CHUNK(
+        let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
             &mut self.output_buf,
             self.last_was_cr,
@@ -72,11 +62,11 @@ impl<R: Read, S: Spec> NormalizingReader<R, S> {
     }
 
     pub fn into_inner(self) -> R {
-        self.reader
+        self.inner
     }
 }
 
-impl<R: Read, S: Spec> Read for NormalizingReader<R, S> {
+impl<R: Read, N: Normalize> Read for Reader<R, N> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.output_pos >= self.output_size {
             self.fill_buf()?;
@@ -93,7 +83,7 @@ impl<R: Read, S: Spec> Read for NormalizingReader<R, S> {
     }
 }
 
-pub struct NormalizingWriter<W, S> {
+pub struct Writer<W, S> {
     _phantom: PhantomData<S>,
     inner: W,
     input_buf: Box<[u8]>,
@@ -102,18 +92,10 @@ pub struct NormalizingWriter<W, S> {
     last_was_cr: bool,
 }
 
-impl<W: Write, S: Spec> NormalizingWriter<W, S> {
-    pub fn new(inner: W) -> Self {
-        Self::with_size(inner, 8192)
-    }
-
-    pub fn with_size(inner: W, buf_size: usize) -> Self {
+impl<W: Write, N: Normalize> Writer<W, N> {
+    pub fn new(inner: W, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let Err(Error::OutputBufferTooSmall { required }) =
-            S::FN_NORMALIZE_CHUNK(&input_buf, &mut [], false, false)
-        else {
-            unreachable!("output buffer should be too small when passing empty buffer");
-        };
+        let required = N::output_size_for(&input_buf);
         Self {
             _phantom: PhantomData,
             inner,
@@ -127,7 +109,7 @@ impl<W: Write, S: Spec> NormalizingWriter<W, S> {
     pub fn finish(self) -> std::io::Result<W> {
         let mut this = self;
         // Finalize any remaining input
-        let status = S::FN_NORMALIZE_CHUNK(
+        let status = N::normalize_chunk(
             &this.input_buf[..this.input_pos],
             &mut this.output_buf,
             this.last_was_cr,
@@ -141,7 +123,7 @@ impl<W: Write, S: Spec> NormalizingWriter<W, S> {
     }
 }
 
-impl<W: Write, S: Spec> Write for NormalizingWriter<W, S> {
+impl<W: Write, N: Normalize> Write for Writer<W, N> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let mut source_buf = buf;
         let mut total_bytes = 0;
@@ -160,7 +142,7 @@ impl<W: Write, S: Spec> Write for NormalizingWriter<W, S> {
                 return Ok(total_bytes);
             }
 
-            let status = S::FN_NORMALIZE_CHUNK(
+            let status = N::normalize_chunk(
                 &self.input_buf,
                 &mut self.output_buf,
                 self.last_was_cr,
@@ -177,7 +159,7 @@ impl<W: Write, S: Spec> Write for NormalizingWriter<W, S> {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        let status = S::FN_NORMALIZE_CHUNK(
+        let status = N::normalize_chunk(
             &self.input_buf[..self.input_pos],
             &mut self.output_buf,
             self.last_was_cr,
@@ -192,5 +174,62 @@ impl<W: Write, S: Spec> Write for NormalizingWriter<W, S> {
             self.input_pos = 0;
         }
         self.inner.flush()
+    }
+}
+
+pub trait IoExt
+where
+    Self: Sized,
+{
+    fn wrap_reader<R: Read>(reader: R) -> Reader<R, Self> {
+        Self::wrap_reader_with_buffer_size(reader, 8192)
+    }
+
+    fn wrap_reader_with_buffer_size<R: Read>(reader: R, buf_size: usize) -> Reader<R, Self>;
+
+    fn wrap_writer<W: Write>(writer: W) -> Writer<W, Self> {
+        Self::wrap_writer_with_buffer_size(writer, 8192)
+    }
+
+    fn wrap_writer_with_buffer_size<W: Write>(writer: W, buf_size: usize) -> Writer<W, Self>;
+}
+
+impl<N: Normalize> IoExt for N {
+    fn wrap_reader_with_buffer_size<R: Read>(reader: R, buf_size: usize) -> Reader<R, Self> {
+        Reader::<R, Self>::new(reader, buf_size)
+    }
+
+    fn wrap_writer_with_buffer_size<W: Write>(writer: W, buf_size: usize) -> Writer<W, Self> {
+        Writer::<W, Self>::new(writer, buf_size)
+    }
+}
+
+pub trait ReadExt {
+    fn normalize_newlines<N: Normalize>(self, _: N) -> Reader<Self, N>
+    where
+        Self: Sized;
+}
+
+impl<R: Read> ReadExt for R {
+    fn normalize_newlines<N: Normalize>(self, _: N) -> Reader<Self, N>
+    where
+        Self: Sized,
+    {
+        N::wrap_reader(self)
+    }
+}
+
+pub trait WriteExt {
+    fn normalize_newlines<N: Normalize>(self, _: N) -> Writer<Self, N>
+    where
+        Self: Sized;
+}
+
+impl<W: Write> WriteExt for W {
+    fn normalize_newlines<N: Normalize>(self, _: N) -> Writer<Self, N>
+    where
+        Self: Sized,
+    {
+        N::wrap_writer(self)
     }
 }

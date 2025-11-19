@@ -1,6 +1,6 @@
 #![no_main]
 
-use eolify::core::{crlf::normalize_chunk, Error};
+use eolify::{Error, Normalize, CRLF};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
@@ -27,7 +27,7 @@ fuzz_target!(|data: &[u8]| {
     }
     let mut out = vec![0u8; buf_len];
     match (
-        normalize_chunk(payload, &mut out, preceded_by_cr, is_last_chunk),
+        CRLF::normalize_chunk(payload, &mut out, preceded_by_cr, is_last_chunk),
         undersize && (is_last_chunk || !payload.is_empty()),
     ) {
         (Ok(_), false) | (Err(Error::OutputBufferTooSmall { .. }), true) => {

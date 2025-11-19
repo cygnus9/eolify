@@ -19,7 +19,7 @@ where consistency and efficiency matter.
 Currently supports: normalization to CRLF (`\r\n`) using:
 * a chunk based API*
 * synchronous `Read` or `Write` implementations.
-* asynchronous `AsyncRead` or `AsyncWrite` implements (both futures_io and tokio are supported).
+* asynchronous `AsyncRead` or `AsyncWrite` implements (both `futures_io` and `tokio` are supported).
 
 ### Planned:
 
@@ -27,10 +27,10 @@ Currently supports: normalization to CRLF (`\r\n`) using:
 
 ## Example
 ```rust
-use eolify::core::crlf;
+use eolify::{CRLF, Normalize};
 
 let text = "one\nline\r\ntwo\rthree";
-let normalized = crlf::normalize_str(text);
+let normalized = CRLF::normalize_str(text);
 assert_eq!(normalized, "one\r\nline\r\ntwo\r\nthree");
 ```
 

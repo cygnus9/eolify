@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::core::{Error, Spec};
+use crate::Normalize;
 
 pub trait AsyncReadCompat {
     fn poll_read(
@@ -14,8 +14,8 @@ pub trait AsyncReadCompat {
     ) -> Poll<std::io::Result<usize>>;
 }
 
-pub struct ReadBuffer<S> {
-    _phantom: PhantomData<S>,
+pub struct ReadBuffer<N> {
+    _phantom: PhantomData<N>,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     output_pos: usize,
@@ -24,15 +24,11 @@ pub struct ReadBuffer<S> {
     end_of_stream: bool,
 }
 
-impl<S: Spec> ReadBuffer<S> {
+impl<N: Normalize> ReadBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let Err(Error::OutputBufferTooSmall { required }) =
-            S::FN_NORMALIZE_CHUNK(&input_buf, &mut [], false, false)
-        else {
-            unreachable!("output buffer should be too small when passing empty buffer");
-        };
+        let required = N::output_size_for(&input_buf);
         Self {
             _phantom: PhantomData,
             input_buf,
@@ -93,7 +89,7 @@ impl<S: Spec> ReadBuffer<S> {
             false
         };
 
-        let status = S::FN_NORMALIZE_CHUNK(
+        let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
             &mut self.output_buf,
             self.last_was_cr,
@@ -119,8 +115,8 @@ pub trait AsyncWriteCompat {
     fn poll_finish(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>>;
 }
 
-pub struct WriteBuffer<S> {
-    _phantom: std::marker::PhantomData<S>,
+pub struct WriteBuffer<N> {
+    _phantom: std::marker::PhantomData<N>,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     input_pos: usize,
@@ -136,15 +132,11 @@ pub enum State {
     Finished,
 }
 
-impl<S: Spec> WriteBuffer<S> {
+impl<N: Normalize> WriteBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let Err(Error::OutputBufferTooSmall { required }) =
-            S::FN_NORMALIZE_CHUNK(&input_buf, &mut [], false, false)
-        else {
-            unreachable!("output buffer should be too small when passing empty buffer");
-        };
+        let required = N::output_size_for(&input_buf);
         Self {
             _phantom: PhantomData,
             input_buf,
@@ -196,7 +188,7 @@ impl<S: Spec> WriteBuffer<S> {
                     return Poll::Ready(Ok(total_bytes));
                 }
 
-                let status = S::FN_NORMALIZE_CHUNK(
+                let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
                     &mut self.output_buf,
                     self.last_was_cr,
@@ -220,7 +212,7 @@ impl<S: Spec> WriteBuffer<S> {
         loop {
             if self.output_size == 0 {
                 // Output buffer is empty, try to fill it
-                let status = S::FN_NORMALIZE_CHUNK(
+                let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
                     &mut self.output_buf,
                     self.last_was_cr,

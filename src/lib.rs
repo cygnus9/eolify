@@ -1,10 +1,16 @@
 #![doc = include_str!("../README.md")]
 
-pub mod core;
-pub mod io;
+mod types;
+pub use types::{Error, Result};
+
+mod formats;
+pub use formats::{crlf::CRLF, Normalize};
+
+mod wrappers;
+pub use wrappers::io::{IoExt, ReadExt, WriteExt};
 
 #[cfg(feature = "futures-io")]
-pub mod futures_io;
+pub use wrappers::futures_io::{FuturesIoAsyncReadExt, FuturesIoAsyncWriteExt, FuturesIoExt};
 
 #[cfg(feature = "tokio")]
-pub mod tokio;
+pub use wrappers::tokio::{TokioAsyncReadExt, TokioAsyncWriteExt, TokioExt};

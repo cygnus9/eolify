@@ -1,12 +1,12 @@
 use std::io::Read;
 
-use eolify::io::crlf::NormalizingReader;
+use eolify::{IoExt, ReadExt, CRLF};
 
 #[test]
 fn crlf_split_across_readers() {
     let readers = vec![b"foo\r".as_ref(), b"\nbar".as_ref()].into_iter();
     let test_reader = TestReader::new(readers);
-    let nr = NormalizingReader::with_size(test_reader, 3);
+    let nr = CRLF::wrap_reader_with_buffer_size(test_reader, 3);
     let out = read_all(nr);
     assert_eq!(out, b"foo\r\nbar".to_vec());
 }
@@ -15,7 +15,7 @@ fn crlf_split_across_readers() {
 fn crlf_split_across_three_readers() {
     let readers = vec![b"\r".as_ref(), b"".as_ref(), b"\n".as_ref()].into_iter();
     let test_reader = TestReader::new(readers);
-    let nr = NormalizingReader::with_size(test_reader, 3);
+    let nr = CRLF::wrap_reader_with_buffer_size(test_reader, 3);
     let out = read_all(nr);
     assert_eq!(out, b"\r\n".to_vec());
 }
@@ -24,7 +24,7 @@ fn crlf_split_across_three_readers() {
 fn lone_lf_in_first_reader_converted_to_crlf() {
     let readers = vec![b"line1\n".as_ref(), b"line2".as_ref()].into_iter();
     let test_reader = TestReader::new(readers);
-    let nr = NormalizingReader::with_size(test_reader, 4);
+    let nr = CRLF::wrap_reader_with_buffer_size(test_reader, 4);
     let out = read_all(nr);
     assert_eq!(out, b"line1\r\nline2".to_vec());
 }
@@ -33,7 +33,7 @@ fn lone_lf_in_first_reader_converted_to_crlf() {
 fn multiple_crs_and_crlf_mixed_across_boundaries() {
     let readers = vec![b"\r".as_ref(), b"\r\n".as_ref()].into_iter();
     let test_reader = TestReader::new(readers);
-    let nr = NormalizingReader::with_size(test_reader, 2);
+    let nr = CRLF::wrap_reader_with_buffer_size(test_reader, 2);
     let out = read_all(nr);
     assert_eq!(out, b"\r\n\r\n".to_vec());
 }
@@ -42,9 +42,18 @@ fn multiple_crs_and_crlf_mixed_across_boundaries() {
 fn trailing_cr_at_eof_emits_crlf() {
     let readers = vec![b"foo\r".as_ref()].into_iter();
     let test_reader = TestReader::new(readers);
-    let nr = NormalizingReader::with_size(test_reader, 4);
+    let nr = CRLF::wrap_reader_with_buffer_size(test_reader, 4);
     let out = read_all(nr);
     assert_eq!(out, b"foo\r\n".to_vec());
+}
+
+#[test]
+fn extension_trait() {
+    let readers = vec![b"\r".as_ref(), b"\r\n".as_ref()].into_iter();
+    let test_reader = TestReader::new(readers);
+    let nr = test_reader.normalize_newlines(CRLF);
+    let out = read_all(nr);
+    assert_eq!(out, b"\r\n\r\n".to_vec());
 }
 
 fn read_all<R: Read>(mut r: R) -> Vec<u8> {

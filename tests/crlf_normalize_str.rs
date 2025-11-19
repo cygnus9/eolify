@@ -1,7 +1,7 @@
-use eolify::core::crlf::normalize_str;
+use eolify::{Normalize, CRLF};
 
 fn run(input: &str) -> String {
-    normalize_str(input)
+    CRLF::normalize_str(input)
 }
 
 #[test]

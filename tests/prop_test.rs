@@ -1,4 +1,4 @@
-use eolify::core::crlf::normalize_chunk;
+use eolify::{Normalize, CRLF};
 use proptest::{arbitrary::any, collection::vec, prop_assert, proptest, test_runner::Config};
 
 proptest! {
@@ -11,12 +11,12 @@ proptest! {
 
         // allocate safe upper-bound buffers
         let mut out1 = vec![0u8; a.len() * 2];
-        let status1 = normalize_chunk(a, &mut out1, false, false)
+        let status1 = CRLF::normalize_chunk(a, &mut out1, false, false)
             .expect("output buffer too small for first chunk");
         out1.truncate(status1.output_len());
 
         let mut out2 = vec![0u8; b.len() * 2 + 1];
-        let status2 = normalize_chunk(b, &mut out2, status1.ended_with_cr(), true)
+        let status2 = CRLF::normalize_chunk(b, &mut out2, status1.ended_with_cr(), true)
             .expect("output buffer too small for second chunk");
         out2.truncate(status2.output_len());
 
@@ -85,7 +85,7 @@ proptest! {
     fn normalize_chunk_idempotent(data in vec(any::<u8>(), 0..256)) {
         // First normalization
         let mut out1 = vec![0u8; data.len() * 2 + 1];
-        let status1 = normalize_chunk(&data, &mut out1, false, true)
+        let status1 = CRLF::normalize_chunk(&data, &mut out1, false, true)
             .expect("output buffer too small for first normalization");
         out1.truncate(status1.output_len());
 
@@ -101,7 +101,7 @@ proptest! {
 
         // Second normalization
         let mut out2 = vec![0u8; out1.len() * 2 + 1];
-        let status2 = normalize_chunk(&out1, &mut out2, false, true)
+        let status2 = CRLF::normalize_chunk(&out1, &mut out2, false, true)
             .expect("output buffer too small for second normalization");
         out2.truncate(status2.output_len());
 
