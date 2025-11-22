@@ -230,6 +230,8 @@ impl<N: Normalize> TokioExt for N {
 }
 
 /// Extension trait to provide convenient methods on `tokio::AsyncRead`.
+///
+/// This trait requires the `tokio` feature to be enabled.
 pub trait TokioAsyncReadExt {
     /// Wrap the reader with a newline-normalizing `AsyncReader`.
     fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncReader<Self, N>
@@ -247,6 +249,8 @@ impl<R: AsyncRead> TokioAsyncReadExt for R {
 }
 
 /// Extension trait to provide convenient methods on `tokio::AsyncWrite`.
+///
+/// This trait requires the `tokio` feature to be enabled.
 pub trait TokioAsyncWriteExt {
     /// Wrap the writer with a newline-normalizing `AsyncWriter`.
     fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncWriter<Self, N>
