@@ -8,24 +8,12 @@ use crate::{
     Error, Result,
 };
 
+/// CRLF normalization format implementation.
+///
+/// Will convert all line endings that are not CRLF (i.e. LF or CR alone) into CRLF.
 pub struct CRLF;
 
 impl Normalize for CRLF {
-    /// Normalize a single chunk of input to CRLF into the provided `output` buffer.
-    ///
-    /// Parameters:
-    /// - `input`: bytes to normalize
-    /// - `output`: destination buffer. Worst-case required size is `input.len() * 2 + 1`.
-    /// - `preceded_by_cr`: set to `true` if the previous chunk ended with a `\r`.
-    /// - `is_last_chunk`: set to `true` if this is the final chunk of the stream.
-    ///
-    /// Returns a `NormalizeChunkResult` on success which tells how many bytes were
-    /// written and whether the chunk ended with a dangling `\r`.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(crate::Error::OutputBufferTooSmall { required })` if `output`
-    /// is too small to hold the worst-case expansion of `input`.
     fn normalize_chunk(
         input: &[u8],
         output: &mut [u8],

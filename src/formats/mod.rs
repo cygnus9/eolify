@@ -1,10 +1,13 @@
+//! The `formats` module contains the core traits and types for normalization. The actual
+//! formats (like CRLF) are implemented in submodules.
+
 use std::string::FromUtf8Error;
 
 use crate::{Error, Result};
 
 pub(crate) mod crlf;
 
-/// Status returned by `normalize_chunk` describing how many bytes were
+/// Result returned by `normalize_chunk` describing how many bytes were
 /// written and whether the chunk ended with a `\r`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizeChunkResult {
@@ -13,15 +16,17 @@ pub struct NormalizeChunkResult {
 }
 
 impl NormalizeChunkResult {
+    /// Construct a new `NormalizeChunkResult`.
     #[must_use]
-    pub(crate) fn new(output_len: usize, ended_with_cr: bool) -> Self {
+    pub fn new(output_len: usize, ended_with_cr: bool) -> Self {
         Self {
             output_len,
             ended_with_cr,
         }
     }
 
-    /// Number of bytes written into the output buffer for this chunk.
+    /// Returns the number of bytes written into the output buffer for the
+    /// last processed chunk.
     #[must_use]
     pub fn output_len(&self) -> usize {
         self.output_len
@@ -37,6 +42,11 @@ impl NormalizeChunkResult {
     }
 }
 
+/// This is the core trait that defines how to normalize data to a specific format.
+///
+/// Implementors must provide the `normalize_chunk` method which performs the actual
+/// normalization logic. All other methods have default implementations based on
+/// `normalize_chunk`. They can be overridden if appropriate.
 pub trait Normalize {
     /// Normalize a single chunk of input to the required format into the provided `output` buffer.
     ///
@@ -52,7 +62,9 @@ pub trait Normalize {
     /// # Errors
     ///
     /// Returns `Err(crate::Error::OutputBufferTooSmall { required })` if `output`
-    /// is too small to hold the worst-case expansion of `input`.
+    /// is too small to hold the  expansion of `input`. The implementation is expected
+    /// (but not required) to calculate the worst-case size without actually processing
+    /// the input.
     fn normalize_chunk(
         input: &[u8],
         output: &mut [u8],
@@ -60,6 +72,10 @@ pub trait Normalize {
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult>;
 
+    /// Returns the required output buffer size for the given input buffer.
+    ///
+    /// The default implementation calls `normalize_chunk` with an empty output buffer
+    /// to determine the worst-case required size.
     #[must_use]
     fn output_size_for(input: &[u8]) -> usize {
         let Err(Error::OutputBufferTooSmall { required }) =
@@ -70,6 +86,7 @@ pub trait Normalize {
         required
     }
 
+    /// Normalize the entire input buffer and return a newly allocated `Vec<u8>` with the result.
     #[must_use]
     fn normalize(input: &[u8]) -> Vec<u8> {
         let mut output = vec![0u8; Self::output_size_for(input)];
@@ -79,6 +96,7 @@ pub trait Normalize {
         output
     }
 
+    /// Normalize the entire input string and return a newly allocated `String` with the result.
     #[must_use]
     fn normalize_str(input: &str) -> String {
         // normalize returns valid UTF-8 when given valid UTF-8 input because we only

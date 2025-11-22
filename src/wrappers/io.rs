@@ -1,3 +1,6 @@
+//! The `io` module provides wrappers for standard I/O `Read` and `Write`
+//! traits to perform newline normalization on-the-fly.
+
 use std::{
     io::{Read, Write},
     marker::PhantomData,
@@ -5,6 +8,7 @@ use std::{
 
 use crate::Normalize;
 
+/// A `std::io::Read` wrapper and implementation that normalizes newlines on-the-fly.
 pub struct Reader<R, N> {
     _phantom: PhantomData<N>,
     inner: R,
@@ -83,6 +87,7 @@ impl<R: Read, N: Normalize> Read for Reader<R, N> {
     }
 }
 
+/// A `std::io::Write` wrapper and implementation that normalizes newlines on-the-fly.
 pub struct Writer<W, S> {
     _phantom: PhantomData<S>,
     inner: W,
@@ -177,20 +182,26 @@ impl<W: Write, N: Normalize> Write for Writer<W, N> {
     }
 }
 
+/// Extension trait to provide convenient methods on `Normalize` for `std::io::Read`
+/// and `std::io::Write`.
 pub trait IoExt
 where
     Self: Sized,
 {
+    /// Wrap a reader with a newline-normalizing `Reader`.
     fn wrap_reader<R: Read>(reader: R) -> Reader<R, Self> {
         Self::wrap_reader_with_buffer_size(reader, 8192)
     }
 
+    /// Wrap a reader with a newline-normalizing `Reader` and specify the internal buffer size.
     fn wrap_reader_with_buffer_size<R: Read>(reader: R, buf_size: usize) -> Reader<R, Self>;
 
+    /// Wrap a writer with a newline-normalizing `Writer`.
     fn wrap_writer<W: Write>(writer: W) -> Writer<W, Self> {
         Self::wrap_writer_with_buffer_size(writer, 8192)
     }
 
+    /// Wrap a writer with a newline-normalizing `Writer` and specify the internal buffer size.
     fn wrap_writer_with_buffer_size<W: Write>(writer: W, buf_size: usize) -> Writer<W, Self>;
 }
 
@@ -204,7 +215,9 @@ impl<N: Normalize> IoExt for N {
     }
 }
 
+/// Extension trait to provide convenient methods on `std::io::Read`.
 pub trait ReadExt {
+    /// Wrap the reader with a newline-normalizing `Reader`.
     fn normalize_newlines<N: Normalize>(self, _: N) -> Reader<Self, N>
     where
         Self: Sized;
@@ -219,7 +232,9 @@ impl<R: Read> ReadExt for R {
     }
 }
 
+/// Extension trait to provide convenient methods on `std::io::Write`.
 pub trait WriteExt {
+    /// Wrap the writer with a newline-normalizing `Writer`.
     fn normalize_newlines<N: Normalize>(self, _: N) -> Writer<Self, N>
     where
         Self: Sized;

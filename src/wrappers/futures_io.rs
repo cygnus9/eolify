@@ -1,3 +1,6 @@
+//! The `futures_io` module provides wrappers for `future::io` `AsyncRead` and `AsyncWrite`
+//! traits to perform newline normalization on-the-fly.
+
 use std::{
     future::Future,
     pin::{pin, Pin},
@@ -13,6 +16,7 @@ use crate::{
 };
 
 pin_project! {
+    /// An `future::io::AsyncRead` wrapper and implementation that normalizes newlines on-the-fly.
     pub struct AsyncReader<R, N> {
         #[pin]
         reader: R,
@@ -59,6 +63,7 @@ impl<R: AsyncRead, N: Normalize> AsyncRead for AsyncReader<R, N> {
 }
 
 pin_project! {
+    /// An `future::io::AsyncWrite` wrapper and implementation that normalizes newlines on-the-fly.
     pub struct AsyncWriter<W, N> {
         #[pin]
         writer: W,
@@ -163,23 +168,31 @@ impl<W: AsyncWrite, N: Normalize> AsyncWrite for AsyncWriter<W, N> {
     }
 }
 
+/// Extension trait to provide convenient methods on `Normalize` for `futures::io::AsyncRead`
+/// and `futures::io::AsyncWrite`.
+///
+/// This trait requires the `futures-io` feature to be enabled.
 pub trait FuturesIoExt
 where
     Self: Sized,
 {
+    /// Wrap a reader with a newline-normalizing `AsyncReader`.
     fn wrap_async_reader<R: AsyncRead>(reader: R) -> AsyncReader<R, Self> {
         Self::wrap_async_reader_with_buffer_size(reader, 8192)
     }
 
+    /// Wrap a reader with a newline-normalizing `AsyncReader` and specify the internal buffer size.
     fn wrap_async_reader_with_buffer_size<R: AsyncRead>(
         reader: R,
         buf_size: usize,
     ) -> AsyncReader<R, Self>;
 
+    /// Wrap a writer with a newline-normalizing `AsyncWriter`.
     fn wrap_async_writer<W: AsyncWrite>(writer: W) -> AsyncWriter<W, Self> {
         Self::wrap_async_writer_with_buffer_size(writer, 8192)
     }
 
+    /// Wrap a writer with a newline-normalizing `AsyncWriter` and specify the internal buffer size.
     fn wrap_async_writer_with_buffer_size<W: AsyncWrite>(
         writer: W,
         buf_size: usize,
@@ -202,7 +215,11 @@ impl<N: Normalize> FuturesIoExt for N {
     }
 }
 
+/// Extension trait to provide convenient methods on `futures::io::AsyncRead`.
+///
+/// This trait requires the `futures-io` feature to be enabled.
 pub trait FuturesIoAsyncReadExt {
+    /// Wrap the reader with a newline-normalizing `AsyncReader`.
     fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncReader<Self, N>
     where
         Self: Sized;
@@ -217,7 +234,11 @@ impl<R: AsyncRead> FuturesIoAsyncReadExt for R {
     }
 }
 
+/// Extension trait to provide convenient methods on `futures::io::AsyncWrite`.
+///
+/// This trait requires the `futures-io` feature to be enabled.
 pub trait FuturesIoAsyncWriteExt {
+    /// Wrap the writer with a newline-normalizing `AsyncWriter`.
     fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncWriter<Self, N>
     where
         Self: Sized;
