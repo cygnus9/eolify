@@ -62,7 +62,7 @@ async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::R
     let mut writer = BufWriter::new(outfile);
 
     tokio::io::copy(&mut reader, &mut writer).await?;
-    writer.flush().await?;
+    writer.shutdown().await?;
     Ok(())
 }
 ```

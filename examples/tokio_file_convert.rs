@@ -19,6 +19,6 @@ async fn main() -> tokio::io::Result<()> {
     let mut writer = CRLF::wrap_async_writer(BufWriter::new(outfile));
 
     tokio::io::copy(&mut reader, &mut writer).await?;
-    writer.flush().await?;
+    writer.shutdown().await?;
     Ok(())
 }
