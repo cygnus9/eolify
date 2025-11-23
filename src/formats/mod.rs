@@ -6,6 +6,7 @@ use std::string::FromUtf8Error;
 use crate::{Error, Result};
 
 pub(crate) mod crlf;
+pub(crate) mod lf;
 
 /// Result returned by `normalize_chunk` describing how many bytes were
 /// written and whether the chunk ended with a `\r`.
