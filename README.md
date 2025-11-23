@@ -54,7 +54,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufWriter};
 use eolify::{CRLF, TokioAsyncReadExt};
 
-async fn normalize_file_sync(input_path: &str, output_path: &str) -> std::io::Result<()> {
+async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::Result<()> {
     let infile = File::open(input_path).await?;
     let mut reader = infile.normalize_newlines(CRLF);
 

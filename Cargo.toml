@@ -25,7 +25,7 @@ async-std = { version = "1.12", features = ["attributes"] }
 criterion = "0.7"
 futures-util = { version = "0.3.31", default-features = false, features = ["io"] }
 proptest = "1.8.0"
-tokio = { version = "1.48.0", default-features = false, features = ["io-util", "macros", "rt"] }
+tokio = { version = "1.48.0", default-features = false, features = ["fs", "io-util", "macros", "rt"] }
 
 [[bench]]
 name = "throughput"
