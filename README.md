@@ -48,25 +48,6 @@ fn normalize_file_sync(input_path: &str, output_path: &str) -> std::io::Result<(
 }
 ```
 
-### Asynchronous I/O (Tokio)
-```rust,no_compile
-use tokio::fs::File;
-use tokio::io::{AsyncWriteExt, BufWriter};
-use eolify::{CRLF, TokioAsyncReadExt};
-
-async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::Result<()> {
-    let infile = File::open(input_path).await?;
-    let mut reader = infile.normalize_newlines(CRLF);
-
-    let outfile = File::create(output_path).await?;
-    let mut writer = BufWriter::new(outfile);
-
-    tokio::io::copy(&mut reader, &mut writer).await?;
-    writer.shutdown().await?;
-    Ok(())
-}
-```
-
 ## Why use eolify?
 
 Working with large text files or streams (logs, ingestion pipelines, cross-platform toolchains) often involves inconsistent line endings (LF, CRLF, CR). Instead of ad-hoc `.replace()` or loading everything into memory, eolify offers a streaming, allocation-conscious approach so you can normalize while reading or writing, without multiple allocations or buffering the entire file.
