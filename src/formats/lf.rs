@@ -4,6 +4,9 @@ use memchr::memchr;
 
 use crate::{formats::NormalizeChunkResult, types, Normalize, Result};
 
+/// LF normalization format implementation.
+///
+/// Will convert all line endings that are not LF (i.e. CRLF or CR alone) into LF.
 pub struct LF;
 
 impl Normalize for LF {

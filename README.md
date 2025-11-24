@@ -15,7 +15,7 @@
 
 ## Current status  
 - Normalization to CRLF (`\r\n`) is implemented.
-- LF-only (`\n`) normalization is **planned** for a future version.
+- Normalization to LF (`\n`) is implemented.
 
 ## Usage  
 

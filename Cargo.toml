@@ -1,10 +1,10 @@
 [package]
 name = "eolify"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Mark Swaanenburg"]
 license = "MIT/Apache-2.0"
-keywords = ["eol", "newline", "line-endings", "crlf"]
+keywords = ["eol", "newline", "line-endings", "crlf", "lf"]
 categories = ["encoding", "text-processing"]
 readme = "README.md"
 documentation = "https://docs.rs/eolify"
