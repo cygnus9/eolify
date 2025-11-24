@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use eolify::{Normalize, CRLF, LF, NormalizeChunkResult};
 use core::fmt;
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use eolify::{Normalize, NormalizeChunkResult, CRLF, LF};
 use std::time::Duration;
 
 /// Generate buffers with a few different patterns:
@@ -100,7 +100,9 @@ fn bench_throughput(c: &mut Criterion) {
                     // pre-allocate once (avoid measuring allocation)
                     let mut out = vec![0u8; data.len() * 3 + 8];
                     b.iter(|| {
-                        let status = format.normalize_chunk(data, &mut out, false, false).unwrap();
+                        let status = format
+                            .normalize_chunk(data, &mut out, false, false)
+                            .unwrap();
                         std::hint::black_box(status.output_len());
                         std::hint::black_box(status.ended_with_cr());
                     })
@@ -135,8 +137,9 @@ fn bench_throughput(c: &mut Criterion) {
                         let mut last_was_cr = false;
                         // process the buffer in fixed-size chunks; pass last flag across chunks
                         for ch in input.chunks(chunk) {
-                            let status =
-                                format.normalize_chunk(ch, &mut out, last_was_cr, false).unwrap();
+                            let status = format
+                                .normalize_chunk(ch, &mut out, last_was_cr, false)
+                                .unwrap();
                             std::hint::black_box(status.output_len());
                             last_was_cr = status.ended_with_cr();
                         }
