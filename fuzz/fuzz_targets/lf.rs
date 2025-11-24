@@ -25,7 +25,7 @@ fuzz_target!(|data: &[u8]| {
     let mut out = vec![0u8; buf_len];
     match (
         LF::normalize_chunk(payload, &mut out, preceded_by_cr, is_last_chunk),
-        undersize && (is_last_chunk || !payload.is_empty()),
+        undersize && !payload.is_empty(),
     ) {
         (Ok(_), false) | (Err(Error::OutputBufferTooSmall { .. }), true) => {
             // all good
