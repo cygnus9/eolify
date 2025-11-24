@@ -24,11 +24,22 @@ tokio = { version = "1.48.0", default-features = false, optional = true }
 async-std = { version = "1.12", features = ["attributes"] }
 criterion = "0.7"
 futures-util = { version = "0.3.31", default-features = false, features = ["io"] }
+newline-converter = "0.3.0"
+newline_normalizer = "0.1.6"
 proptest = "1.8.0"
+regex = "1.12.2"
 tokio = { version = "1.48.0", default-features = false, features = ["fs", "io-util", "macros", "rt"] }
 
 [[bench]]
 name = "throughput"
+harness = false
+
+[[bench]]
+name = "to_unix"
+harness = false
+
+[[bench]]
+name = "to_dos"
 harness = false
 
 [features]

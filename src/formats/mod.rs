@@ -1,8 +1,6 @@
 //! The `formats` module contains the core traits and types for normalization. The actual
 //! formats (like CRLF) are implemented in submodules.
 
-use std::string::FromUtf8Error;
-
 use crate::{Error, Result};
 
 pub(crate) mod crlf;
@@ -100,12 +98,10 @@ pub trait Normalize {
     /// Normalize the entire input string and return a newly allocated `String` with the result.
     #[must_use]
     fn normalize_str(input: &str) -> String {
-        // normalize returns valid UTF-8 when given valid UTF-8 input because we only
+        // SAFETY: normalize returns valid UTF-8 when given valid UTF-8 input because we only
         // insert ASCII CR/LF bytes.
-        String::from_utf8(Self::normalize(input.as_bytes())).unwrap_or_else(
-            |FromUtf8Error { .. }| {
-                unreachable!("normalize produced invalid UTF-8 (should be impossible)")
-            },
-        )
+        unsafe {
+            String::from_utf8_unchecked(Self::normalize(input.as_bytes()))
+        }
     }
 }
