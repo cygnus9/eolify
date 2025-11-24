@@ -4,7 +4,7 @@ mod types;
 pub use types::{Error, Result};
 
 mod formats;
-pub use formats::{crlf::CRLF, lf::LF, Normalize};
+pub use formats::{crlf::CRLF, lf::LF, Normalize, NormalizeChunkResult};
 
 mod wrappers;
 pub use wrappers::io::{IoExt, ReadExt, WriteExt};

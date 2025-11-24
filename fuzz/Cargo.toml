@@ -19,3 +19,10 @@ path = "fuzz_targets/crlf.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "lf"
+path = "fuzz_targets/lf.rs"
+test = false
+doc = false
+bench = false

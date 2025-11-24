@@ -1,5 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use eolify::{Normalize, CRLF};
+use eolify::{Normalize, CRLF, LF, NormalizeChunkResult};
+use core::fmt;
 use std::time::Duration;
 
 /// Generate buffers with a few different patterns:
@@ -49,71 +50,104 @@ fn make_buffer(size: usize, pattern: &str) -> Vec<u8> {
     v
 }
 
+enum Format {
+    CRLF,
+    LF,
+}
+
+impl fmt::Display for Format {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Format::CRLF => write!(f, "crlf"),
+            Format::LF => write!(f, "lf"),
+        }
+    }
+}
+
+impl Format {
+    fn normalize_chunk(
+        &self,
+        input: &[u8],
+        output: &mut [u8],
+        preceded_by_cr: bool,
+        is_last_chunk: bool,
+    ) -> eolify::Result<NormalizeChunkResult> {
+        match self {
+            Format::CRLF => CRLF::normalize_chunk(input, output, preceded_by_cr, is_last_chunk),
+            Format::LF => LF::normalize_chunk(input, output, preceded_by_cr, is_last_chunk),
+        }
+    }
+}
+
 fn bench_throughput(c: &mut Criterion) {
-    let mut group = c.benchmark_group("crlf_throughput");
-    // Longer measurement to get stable GB/s numbers
-    group.measurement_time(Duration::from_secs(10));
-    group.sample_size(10);
+    let formats = [Format::CRLF, Format::LF];
 
-    let sizes = [4 << 10, 16 << 10, 512 << 10, 1 << 20]; // 4KiB, 16KiB, 512KiB, 1MiB
-    let patterns = ["random", "all_lf", "all_cr", "crlf", "mixed"];
+    for format in formats {
+        let mut group1 = c.benchmark_group(format!("{format}_throughput"));
+        // Longer measurement to get stable GB/s numbers
+        group1.measurement_time(Duration::from_secs(3));
+        group1.sample_size(10);
 
-    for &size in &sizes {
-        for &pattern in &patterns {
-            let buf = make_buffer(size, pattern);
-            let id = BenchmarkId::new(pattern, size);
-            group.throughput(Throughput::Bytes(size as u64));
-            group.bench_with_input(id, &buf, |b, data| {
-                // pre-allocate once (avoid measuring allocation)
-                let mut out = vec![0u8; data.len() * 3 + 8];
-                b.iter(|| {
-                    let status = CRLF::normalize_chunk(data, &mut out, false, false).unwrap();
-                    std::hint::black_box(status.output_len());
-                    std::hint::black_box(status.ended_with_cr());
-                })
-            });
-        }
-    }
+        let sizes = [8 << 10, 1 << 20]; // 8KiB, 1MiB
+        let patterns = ["random", "all_lf", "all_cr", "crlf", "mixed"];
 
-    group.finish();
-
-    // --- Chunked processing benchmark: process a large buffer in fixed-size chunks,
-    // varying chunk size and preserving last_was_cr across chunk boundaries.
-    let mut group2 = c.benchmark_group("crlf_chunked");
-    group2.measurement_time(Duration::from_secs(10));
-    group2.sample_size(10);
-
-    let max_size = 64 << 20; // largest block to process (64MiB)
-    let chunk_sizes = [8 << 10, 16 << 10, 32 << 10, 64 << 10, 128 << 10]; // 8K, 16K, 32K, 64K, 128K
-                                                                          // reuse the same patterns as above
-    for &pattern in &patterns {
-        let data = make_buffer(max_size, pattern);
-        // precompute max chunk so we can allocate a single reusable output buffer
-        let max_chunk = *chunk_sizes.iter().max().unwrap();
-        // output buffer sized for the largest chunk (safe for any chunk size)
-        let mut out = vec![0u8; max_chunk * 3 + 8];
-
-        for &chunk in &chunk_sizes {
-            let id = BenchmarkId::new(format!("{pattern}/chunk-{chunk}"), max_size);
-            group2.throughput(Throughput::Bytes(max_size as u64));
-            group2.bench_with_input(id, &data, |b, input| {
-                // out is captured from outer scope and reused; avoid allocating inside iter.
-                b.iter(|| {
-                    let mut last_was_cr = false;
-                    // process the buffer in fixed-size chunks; pass last flag across chunks
-                    for ch in input.chunks(chunk) {
-                        let status =
-                            CRLF::normalize_chunk(ch, &mut out, last_was_cr, false).unwrap();
+        for &size in &sizes {
+            for &pattern in &patterns {
+                let buf = make_buffer(size, pattern);
+                let id = BenchmarkId::new(pattern, size);
+                group1.throughput(Throughput::Bytes(size as u64));
+                group1.bench_with_input(id, &buf, |b, data| {
+                    // pre-allocate once (avoid measuring allocation)
+                    let mut out = vec![0u8; data.len() * 3 + 8];
+                    b.iter(|| {
+                        let status = format.normalize_chunk(data, &mut out, false, false).unwrap();
                         std::hint::black_box(status.output_len());
-                        last_was_cr = status.ended_with_cr();
-                    }
-                    std::hint::black_box(last_was_cr);
-                })
-            });
+                        std::hint::black_box(status.ended_with_cr());
+                    })
+                });
+            }
         }
-    }
 
-    group2.finish();
+        group1.finish();
+
+        // --- Chunked processing benchmark: process a large buffer in fixed-size chunks,
+        // varying chunk size and preserving last_was_cr across chunk boundaries.
+        let mut group2 = c.benchmark_group(format!("{format}_chunked"));
+        group2.measurement_time(Duration::from_secs(3));
+        group2.sample_size(10);
+
+        let max_size = 64 << 20; // largest block to process (64MiB)
+        let chunk_sizes = [1 << 10, 8 << 10, 16 << 10]; // 1K, 8K, 16K
+                                                        // reuse the same patterns as above
+        for &pattern in &patterns {
+            let data = make_buffer(max_size, pattern);
+            // precompute max chunk so we can allocate a single reusable output buffer
+            let max_chunk = *chunk_sizes.iter().max().unwrap();
+            // output buffer sized for the largest chunk (safe for any chunk size)
+            let mut out = vec![0u8; max_chunk * 3 + 8];
+
+            for &chunk in &chunk_sizes {
+                let id = BenchmarkId::new(format!("{pattern}/chunk-{chunk}"), max_size);
+                group2.throughput(Throughput::Bytes(max_size as u64));
+                group2.bench_with_input(id, &data, |b, input| {
+                    // out is captured from outer scope and reused; avoid allocating inside iter.
+                    b.iter(|| {
+                        let mut last_was_cr = false;
+                        // process the buffer in fixed-size chunks; pass last flag across chunks
+                        for ch in input.chunks(chunk) {
+                            let status =
+                                format.normalize_chunk(ch, &mut out, last_was_cr, false).unwrap();
+                            std::hint::black_box(status.output_len());
+                            last_was_cr = status.ended_with_cr();
+                        }
+                        std::hint::black_box(last_was_cr);
+                    })
+                });
+            }
+        }
+
+        group2.finish();
+    }
 }
 
 criterion_group!(benches, bench_throughput);

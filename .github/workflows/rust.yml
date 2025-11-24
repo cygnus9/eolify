@@ -28,5 +28,7 @@ jobs:
     - uses: actions/checkout@v5
     - name: Install cargo-fuzz
       run: cargo +nightly install cargo-fuzz
-    - name: Run fuzz tests
+    - name: Run crlf fuzz tests
       run: cargo +nightly fuzz run --release crlf -- -runs=1000000
+    - name: Run lf fuzz tests
+      run: cargo +nightly fuzz run --release lf -- -runs=1000000
