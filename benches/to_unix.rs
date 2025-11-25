@@ -1,8 +1,8 @@
 use std::{hint::black_box, sync::LazyLock};
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use eolify::{Normalize, LF};
-use newline_normalizer::{ToDosNewlines, ToUnixNewlines};
+use eolify::{Normalize, CRLF, LF};
+use newline_normalizer::ToUnixNewlines;
 use regex::Regex;
 
 static UNIX_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\r\n?").unwrap());
@@ -22,9 +22,8 @@ fn bench_to_unix_newlines(c: &mut Criterion) {
     assert_eq!(pre_normalized_input, newline_converter::dos2unix(&input));
     assert_eq!(pre_normalized_input, input.to_unix_newlines());
 
-    let large_input = include_str!("./files/sherlock.txt")
-        .to_dos_newlines()
-        .to_string(); // input text has all new lines in Unix format, so we have to convert it to DOS format first for the sake of the benchmark
+    // input text has all new lines in Unix format, so we have to convert it to DOS format first for the sake of the benchmark
+    let large_input = CRLF::normalize_str(include_str!("./files/sherlock.txt"));
     let pre_normalized_large_input = LF::normalize_str(&large_input);
     assert_eq!(
         pre_normalized_large_input,
