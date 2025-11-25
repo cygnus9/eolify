@@ -100,8 +100,6 @@ pub trait Normalize {
     fn normalize_str(input: &str) -> String {
         // SAFETY: normalize returns valid UTF-8 when given valid UTF-8 input because we only
         // insert ASCII CR/LF bytes.
-        unsafe {
-            String::from_utf8_unchecked(Self::normalize(input.as_bytes()))
-        }
+        unsafe { String::from_utf8_unchecked(Self::normalize(input.as_bytes())) }
     }
 }
