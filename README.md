@@ -1,6 +1,8 @@
 # eolify  
 **High-performance line ending normalization for Rust**  
 
+[![crates.io](https://img.shields.io/crates/v/eolify.svg?color=blue)](https://crates.io/crates/eolify)
+
 `eolify` is a lightweight, allocation-conscious library for normalizing end-of-line (EOL) sequences in large text streams or buffers. It’s designed for high-throughput processing pipelines, data ingestion systems, and cross-platform tooling where consistency and efficiency matter.  
 
 ## Features  
