@@ -1,4 +1,4 @@
-use std::ptr;
+use std::{mem::MaybeUninit, ptr};
 
 use memchr::memchr2;
 
@@ -16,7 +16,7 @@ pub struct CRLF;
 impl Normalize for CRLF {
     fn normalize_chunk(
         input: &[u8],
-        output: &mut [u8],
+        output: &mut [MaybeUninit<u8>],
         preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult> {
@@ -60,7 +60,7 @@ impl Normalize for CRLF {
             // We found:
             // - not a LF preceeded by a CR from the previous chunk, or
             // - empty input preceeded by a CR from the previous chunk
-            output[0] = LF;
+            output[0] = MaybeUninit::new(LF);
             write_pos = 1;
         }
 
@@ -86,11 +86,12 @@ impl Normalize for CRLF {
                         unsafe {
                             ptr::copy_nonoverlapping(
                                 input.as_ptr().add(read_pos),
-                                output.as_mut_ptr().add(write_pos),
+                                output.as_mut_ptr().add(write_pos).cast::<u8>(),
                                 bytes_now,
                             );
-                            *output.get_unchecked_mut(write_pos + bytes_now) = CR;
-                            *output.get_unchecked_mut(write_pos + bytes_now + 1) = LF;
+                            *output.get_unchecked_mut(write_pos + bytes_now) = MaybeUninit::new(CR);
+                            *output.get_unchecked_mut(write_pos + bytes_now + 1) =
+                                MaybeUninit::new(LF);
                         }
                         read_pos = i + 1;
                         scan_pos = read_pos;
@@ -105,11 +106,12 @@ impl Normalize for CRLF {
                         unsafe {
                             ptr::copy_nonoverlapping(
                                 input.as_ptr().add(read_pos),
-                                output.as_mut_ptr().add(write_pos),
+                                output.as_mut_ptr().add(write_pos).cast::<u8>(),
                                 bytes_now,
                             );
                             if is_last_chunk {
-                                *output.get_unchecked_mut(write_pos + bytes_now) = LF;
+                                *output.get_unchecked_mut(write_pos + bytes_now) =
+                                    MaybeUninit::new(LF);
                             }
                         }
                         break Ok(NormalizeChunkResult::new(
@@ -128,7 +130,7 @@ impl Normalize for CRLF {
                 unsafe {
                     ptr::copy_nonoverlapping(
                         input.as_ptr().add(read_pos),
-                        output.as_mut_ptr().add(write_pos),
+                        output.as_mut_ptr().add(write_pos).cast::<u8>(),
                         bytes_now,
                     );
                 }

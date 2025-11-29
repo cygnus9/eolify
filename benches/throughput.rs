@@ -1,7 +1,7 @@
 use core::fmt;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use eolify::{Normalize, NormalizeChunkResult, CRLF, LF};
-use std::time::Duration;
+use eolify::{helpers::vec_to_uninit_mut, Normalize, NormalizeChunkResult, CRLF, LF};
+use std::{mem::MaybeUninit, time::Duration};
 
 /// Generate buffers with a few different patterns:
 /// - "random": pseudo-random bytes (deterministic LCG)
@@ -68,7 +68,7 @@ impl Format {
     fn normalize_chunk(
         &self,
         input: &[u8],
-        output: &mut [u8],
+        output: &mut [MaybeUninit<u8>],
         preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> eolify::Result<NormalizeChunkResult> {
@@ -98,10 +98,10 @@ fn bench_throughput(c: &mut Criterion) {
                 group1.throughput(Throughput::Bytes(size as u64));
                 group1.bench_with_input(id, &buf, |b, data| {
                     // pre-allocate once (avoid measuring allocation)
-                    let mut out = vec![0u8; data.len() * 3 + 8];
+                    let mut out = Vec::with_capacity(data.len() * 3 + 8);
                     b.iter(|| {
                         let status = format
-                            .normalize_chunk(data, &mut out, false, false)
+                            .normalize_chunk(data, vec_to_uninit_mut(&mut out), false, false)
                             .unwrap();
                         std::hint::black_box(status.output_len());
                         std::hint::black_box(status.ended_with_cr());
@@ -126,7 +126,7 @@ fn bench_throughput(c: &mut Criterion) {
             // precompute max chunk so we can allocate a single reusable output buffer
             let max_chunk = *chunk_sizes.iter().max().unwrap();
             // output buffer sized for the largest chunk (safe for any chunk size)
-            let mut out = vec![0u8; max_chunk * 3 + 8];
+            let mut out = Vec::with_capacity(max_chunk * 3 + 8);
 
             for &chunk in &chunk_sizes {
                 let id = BenchmarkId::new(format!("{pattern}/chunk-{chunk}"), max_size);
@@ -138,7 +138,12 @@ fn bench_throughput(c: &mut Criterion) {
                         // process the buffer in fixed-size chunks; pass last flag across chunks
                         for ch in input.chunks(chunk) {
                             let status = format
-                                .normalize_chunk(ch, &mut out, last_was_cr, false)
+                                .normalize_chunk(
+                                    ch,
+                                    vec_to_uninit_mut(&mut out),
+                                    last_was_cr,
+                                    false,
+                                )
                                 .unwrap();
                             std::hint::black_box(status.output_len());
                             last_was_cr = status.ended_with_cr();

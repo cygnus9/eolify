@@ -1,4 +1,4 @@
-use std::ptr;
+use std::{mem::MaybeUninit, ptr};
 
 use memchr::memchr;
 
@@ -12,7 +12,7 @@ pub struct LF;
 impl Normalize for LF {
     fn normalize_chunk(
         input: &[u8],
-        output: &mut [u8],
+        output: &mut [MaybeUninit<u8>],
         preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult> {
@@ -61,7 +61,7 @@ impl Normalize for LF {
                         unsafe {
                             ptr::copy_nonoverlapping(
                                 input.as_ptr().add(read_pos),
-                                output.as_mut_ptr().add(write_pos),
+                                output.as_mut_ptr().add(write_pos).cast::<u8>(),
                                 bytes_now,
                             );
                         }
@@ -81,10 +81,11 @@ impl Normalize for LF {
                         unsafe {
                             ptr::copy_nonoverlapping(
                                 input.as_ptr().add(read_pos),
-                                output.as_mut_ptr().add(write_pos),
+                                output.as_mut_ptr().add(write_pos).cast::<u8>(),
                                 bytes_now,
                             );
-                            *output.get_unchecked_mut(write_pos + bytes_now) = types::LF;
+                            *output.get_unchecked_mut(write_pos + bytes_now) =
+                                MaybeUninit::new(types::LF);
                         }
                         if next.is_none() {
                             break Ok(NormalizeChunkResult::new(
@@ -107,7 +108,7 @@ impl Normalize for LF {
                 unsafe {
                     ptr::copy_nonoverlapping(
                         input.as_ptr().add(read_pos),
-                        output.as_mut_ptr().add(write_pos),
+                        output.as_mut_ptr().add(write_pos).cast::<u8>(),
                         bytes_now,
                     );
                 }

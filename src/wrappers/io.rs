@@ -6,7 +6,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::Normalize;
+use crate::{helpers::slice_to_uninit_mut, Normalize};
 
 /// A `std::io::Read` wrapper and implementation that normalizes newlines on-the-fly.
 pub struct Reader<R, N> {
@@ -54,7 +54,7 @@ impl<R: Read, N: Normalize> Reader<R, N> {
 
         let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
-            &mut self.output_buf,
+            slice_to_uninit_mut(&mut self.output_buf),
             self.last_was_cr,
             is_last_chunk,
         )
@@ -116,7 +116,7 @@ impl<W: Write, N: Normalize> Writer<W, N> {
         // Finalize any remaining input
         let status = N::normalize_chunk(
             &this.input_buf[..this.input_pos],
-            &mut this.output_buf,
+            slice_to_uninit_mut(&mut this.output_buf),
             this.last_was_cr,
             true, // this is the last chunk
         )
@@ -149,7 +149,7 @@ impl<W: Write, N: Normalize> Write for Writer<W, N> {
 
             let status = N::normalize_chunk(
                 &self.input_buf,
-                &mut self.output_buf,
+                slice_to_uninit_mut(&mut self.output_buf),
                 self.last_was_cr,
                 false,
             )
@@ -166,7 +166,7 @@ impl<W: Write, N: Normalize> Write for Writer<W, N> {
     fn flush(&mut self) -> std::io::Result<()> {
         let status = N::normalize_chunk(
             &self.input_buf[..self.input_pos],
-            &mut self.output_buf,
+            slice_to_uninit_mut(&mut self.output_buf),
             self.last_was_cr,
             false, // flush is not neccesarily the end of stream
         )

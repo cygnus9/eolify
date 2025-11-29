@@ -1,7 +1,9 @@
 //! The `formats` module contains the core traits and types for normalization. The actual
 //! formats (like CRLF) are implemented in submodules.
 
-use crate::{Error, Result};
+use std::mem::MaybeUninit;
+
+use crate::{helpers::vec_to_uninit_mut, Error, Result};
 
 pub(crate) mod crlf;
 pub(crate) mod lf;
@@ -66,7 +68,7 @@ pub trait Normalize {
     /// the input.
     fn normalize_chunk(
         input: &[u8],
-        output: &mut [u8],
+        output: &mut [MaybeUninit<u8>],
         preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult>;
@@ -88,10 +90,15 @@ pub trait Normalize {
     /// Normalize the entire input buffer and return a newly allocated `Vec<u8>` with the result.
     #[must_use]
     fn normalize(input: &[u8]) -> Vec<u8> {
-        let mut output = vec![0u8; Self::output_size_for(input)];
-        let status = Self::normalize_chunk(input, &mut output, false, true)
+        let mut output = Vec::with_capacity(Self::output_size_for(input));
+        let status = Self::normalize_chunk(input, vec_to_uninit_mut(&mut output), false, true)
             .unwrap_or_else(|err| unreachable!("{err} (should be impossible)",));
-        output.truncate(status.output_len());
+
+        // SAFETY: We trust that the implementation of normalize_chunk correctly
+        unsafe {
+            output.set_len(status.output_len());
+        }
+
         output
     }
 

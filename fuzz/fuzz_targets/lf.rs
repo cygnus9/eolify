@@ -1,6 +1,6 @@
 #![no_main]
 
-use eolify::{Error, Normalize, LF};
+use eolify::{helpers::vec_to_uninit_mut, Error, Normalize, LF};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
@@ -22,9 +22,14 @@ fuzz_target!(|data: &[u8]| {
     if undersize && buf_len > 0 {
         buf_len = buf_len.saturating_sub(1);
     }
-    let mut out = vec![0u8; buf_len];
+    let mut out = Vec::with_capacity(buf_len);
     match (
-        LF::normalize_chunk(payload, &mut out, preceded_by_cr, is_last_chunk),
+        LF::normalize_chunk(
+            payload,
+            vec_to_uninit_mut(&mut out),
+            preceded_by_cr,
+            is_last_chunk,
+        ),
         undersize && !payload.is_empty(),
     ) {
         (Ok(_), false) | (Err(Error::OutputBufferTooSmall { .. }), true) => {

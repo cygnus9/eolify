@@ -1,4 +1,4 @@
-use eolify::{Normalize, LF};
+use eolify::{helpers::vec_to_uninit_mut, Normalize, LF};
 use proptest::{arbitrary::any, collection::vec, prop_assert, proptest, test_runner::Config};
 
 proptest! {
@@ -10,15 +10,19 @@ proptest! {
         let (a, b) = data.split_at(split);
 
         // allocate safe upper-bound buffers
-        let mut out1 = vec![0u8; a.len()];
-        let status1 = LF::normalize_chunk(a, &mut out1, false, false)
+        let mut out1 = Vec::with_capacity(a.len());
+        let status1 = LF::normalize_chunk(a,vec_to_uninit_mut( &mut out1), false, false)
             .expect("output buffer too small for first chunk");
-        out1.truncate(status1.output_len());
+        unsafe {
+            out1.set_len(status1.output_len());
+        }
 
-        let mut out2 = vec![0u8; b.len() * 2 + 1];
-        let status2 = LF::normalize_chunk(b, &mut out2, status1.ended_with_cr(), true)
+        let mut out2 = Vec::with_capacity(b.len() * 2 + 1);
+        let status2 = LF::normalize_chunk(b,vec_to_uninit_mut( &mut out2), status1.ended_with_cr(), true)
             .expect("output buffer too small for second chunk");
-        out2.truncate(status2.output_len());
+        unsafe {
+            out2.set_len(status2.output_len());
+        }
 
         let combined = [out1.as_slice(), out2.as_slice()].concat();
 
@@ -51,10 +55,12 @@ proptest! {
     #[test]
     fn normalize_chunk_idempotent(data in vec(any::<u8>(), 0..256)) {
         // First normalization
-        let mut out1 = vec![0u8; data.len() * 2 + 1];
-        let status1 = LF::normalize_chunk(&data, &mut out1, false, true)
+        let mut out1 = Vec::with_capacity(data.len() * 2 + 1);
+        let status1 = LF::normalize_chunk(&data,vec_to_uninit_mut( &mut out1), false, true)
             .expect("output buffer too small for first normalization");
-        out1.truncate(status1.output_len());
+        unsafe {
+            out1.set_len(status1.output_len());
+        }
 
         // out1 must not contain any CR
         for i in 0..out1.len() {
@@ -62,10 +68,12 @@ proptest! {
         }
 
         // Second normalization
-        let mut out2 = vec![0u8; out1.len() * 2 + 1];
-        let status2 = LF::normalize_chunk(&out1, &mut out2, false, true)
+        let mut out2 = Vec::with_capacity(out1.len() * 2 + 1);
+        let status2 = LF::normalize_chunk(&out1,vec_to_uninit_mut( &mut out2), false, true)
             .expect("output buffer too small for second normalization");
-        out2.truncate(status2.output_len());
+        unsafe {
+            out2.set_len(status2.output_len());
+        }
 
         // The second normalization should be identical to the first
         prop_assert!(out1 == out2, "second normalization differs from first");

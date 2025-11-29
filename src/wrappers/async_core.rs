@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::Normalize;
+use crate::{helpers::slice_to_uninit_mut, Normalize};
 
 pub trait AsyncReadCompat {
     fn poll_read(
@@ -91,7 +91,7 @@ impl<N: Normalize> ReadBuffer<N> {
 
         let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
-            &mut self.output_buf,
+            slice_to_uninit_mut(&mut self.output_buf),
             self.last_was_cr,
             is_last_chunk,
         )
@@ -190,7 +190,7 @@ impl<N: Normalize> WriteBuffer<N> {
 
                 let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
-                    &mut self.output_buf,
+                    slice_to_uninit_mut(&mut self.output_buf),
                     self.last_was_cr,
                     false,
                 )
@@ -214,7 +214,7 @@ impl<N: Normalize> WriteBuffer<N> {
                 // Output buffer is empty, try to fill it
                 let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
-                    &mut self.output_buf,
+                    slice_to_uninit_mut(&mut self.output_buf),
                     self.last_was_cr,
                     finish,
                 )
