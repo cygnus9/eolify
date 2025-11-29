@@ -23,7 +23,7 @@ pub struct Reader<R, N> {
 impl<R: Read, N: NormalizeChunk> Reader<R, N> {
     pub fn new(reader: R, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(&input_buf, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, false, false);
         Self {
             _phantom: PhantomData,
             inner: reader,
@@ -100,7 +100,7 @@ pub struct Writer<W, S> {
 impl<W: Write, N: NormalizeChunk> Writer<W, N> {
     pub fn new(inner: W, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(&input_buf, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, false, false);
         Self {
             _phantom: PhantomData,
             inner,

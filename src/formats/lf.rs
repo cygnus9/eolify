@@ -11,11 +11,11 @@ pub struct LF;
 
 impl NormalizeChunk for LF {
     fn max_output_size_for_chunk(
-        input: &[u8],
+        chunk_size: usize,
         _preceded_by_cr: bool,
         _is_last_chunk: bool,
     ) -> usize {
-        input.len()
+        chunk_size
     }
 
     fn normalize_chunk(
@@ -24,7 +24,8 @@ impl NormalizeChunk for LF {
         preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult> {
-        let output_required = Self::max_output_size_for_chunk(input, preceded_by_cr, is_last_chunk);
+        let output_required =
+            Self::max_output_size_for_chunk(input.len(), preceded_by_cr, is_last_chunk);
         if output.len() < output_required {
             return Err(crate::Error::OutputBufferTooSmall {
                 required: output_required,

@@ -72,9 +72,13 @@ pub trait NormalizeChunk {
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult>;
 
-    /// Returns the worst-case required output buffer size for the given input buffer.
+    /// Returns the worst-case required output buffer size for the given chunk_size.
     #[must_use]
-    fn max_output_size_for_chunk(input: &[u8], preceded_by_cr: bool, is_last_chunk: bool) -> usize;
+    fn max_output_size_for_chunk(
+        chunk_size: usize,
+        preceded_by_cr: bool,
+        is_last_chunk: bool,
+    ) -> usize;
 }
 
 /// This is the trait that consumers will typically use to normalize vectors or
@@ -91,7 +95,8 @@ pub trait Normalize {
 
 impl<N: NormalizeChunk> Normalize for N {
     fn normalize(input: &[u8]) -> Vec<u8> {
-        let mut output = Vec::with_capacity(Self::max_output_size_for_chunk(input, false, true));
+        let mut output =
+            Vec::with_capacity(Self::max_output_size_for_chunk(input.len(), false, true));
         let status = Self::normalize_chunk(input, vec_to_uninit_mut(&mut output), false, true)
             .unwrap_or_else(|err| unreachable!("{err} (should be impossible)",));
 

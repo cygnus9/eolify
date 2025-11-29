@@ -15,7 +15,7 @@ pub struct CRLF;
 
 impl NormalizeChunk for CRLF {
     fn max_output_size_for_chunk(
-        input: &[u8],
+        chunk_size: usize,
         _preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> usize {
@@ -35,7 +35,7 @@ impl NormalizeChunk for CRLF {
         // look at `is_last_chunk`. We could just require 2n + 1 bytes always, but that would be surprising for
         // callers that intuitively expect 2n to be sufficient in all cases, or at least when not processing the
         // last chunk.
-        input.len() * 2 + usize::from(is_last_chunk)
+        chunk_size * 2 + usize::from(is_last_chunk)
     }
 
     fn normalize_chunk(
@@ -44,7 +44,8 @@ impl NormalizeChunk for CRLF {
         preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult> {
-        let output_required = Self::max_output_size_for_chunk(input, preceded_by_cr, is_last_chunk);
+        let output_required =
+            Self::max_output_size_for_chunk(input.len(), preceded_by_cr, is_last_chunk);
         if output.len() < output_required {
             return Err(Error::OutputBufferTooSmall {
                 required: output_required,

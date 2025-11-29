@@ -28,7 +28,7 @@ impl<N: NormalizeChunk> ReadBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(&input_buf, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, false, false);
         Self {
             _phantom: PhantomData,
             input_buf,
@@ -136,7 +136,7 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(&input_buf, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, false, false);
         Self {
             _phantom: PhantomData,
             input_buf,
