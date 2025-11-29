@@ -12,7 +12,7 @@ use pin_project_lite::pin_project;
 
 use crate::{
     wrappers::async_core::{AsyncReadCompat, AsyncWriteCompat, ReadBuffer, WriteBuffer},
-    Normalize,
+    NormalizeChunk,
 };
 
 pin_project! {
@@ -24,7 +24,7 @@ pin_project! {
     }
 }
 
-impl<R, N: Normalize> AsyncReader<R, N> {
+impl<R, N: NormalizeChunk> AsyncReader<R, N> {
     pub fn new(reader: R, buf_size: usize) -> Self {
         Self {
             reader,
@@ -50,7 +50,7 @@ impl<R: futures_io::AsyncRead + Unpin> AsyncReadCompat for FuturesIoReader<R> {
     }
 }
 
-impl<R: AsyncRead, N: Normalize> AsyncRead for AsyncReader<R, N> {
+impl<R: AsyncRead, N: NormalizeChunk> AsyncRead for AsyncReader<R, N> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -71,7 +71,7 @@ pin_project! {
     }
 }
 
-impl<W, N: Normalize> AsyncWriter<W, N> {
+impl<W, N: NormalizeChunk> AsyncWriter<W, N> {
     pub fn new(writer: W, buf_size: usize) -> Self {
         Self {
             writer,
@@ -80,7 +80,7 @@ impl<W, N: Normalize> AsyncWriter<W, N> {
     }
 }
 
-impl<W: AsyncWrite + Unpin, N: Normalize> AsyncWriter<W, N> {
+impl<W: AsyncWrite + Unpin, N: NormalizeChunk> AsyncWriter<W, N> {
     pub fn finish(self) -> impl Future<Output = std::io::Result<W>> {
         Finisher {
             writer: Some(self.writer),
@@ -97,7 +97,7 @@ struct Finisher<W, N> {
 }
 }
 
-impl<W: AsyncWrite + Unpin, N: Normalize> Future for Finisher<W, N> {
+impl<W: AsyncWrite + Unpin, N: NormalizeChunk> Future for Finisher<W, N> {
     type Output = std::io::Result<W>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -141,7 +141,7 @@ impl<W: AsyncWrite + Unpin> AsyncWriteCompat for FuturesIoWriter<W> {
     }
 }
 
-impl<W: AsyncWrite, N: Normalize> AsyncWrite for AsyncWriter<W, N> {
+impl<W: AsyncWrite, N: NormalizeChunk> AsyncWrite for AsyncWriter<W, N> {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -199,7 +199,7 @@ where
     ) -> AsyncWriter<W, Self>;
 }
 
-impl<N: Normalize> FuturesIoExt for N {
+impl<N: NormalizeChunk> FuturesIoExt for N {
     fn wrap_async_reader_with_buffer_size<R: AsyncRead>(
         reader: R,
         buf_size: usize,
@@ -220,13 +220,13 @@ impl<N: Normalize> FuturesIoExt for N {
 /// This trait requires the `futures-io` feature to be enabled.
 pub trait FuturesIoAsyncReadExt {
     /// Wrap the reader with a newline-normalizing `AsyncReader`.
-    fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncReader<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> AsyncReader<Self, N>
     where
         Self: Sized;
 }
 
 impl<R: AsyncRead> FuturesIoAsyncReadExt for R {
-    fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncReader<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> AsyncReader<Self, N>
     where
         Self: Sized,
     {
@@ -239,13 +239,13 @@ impl<R: AsyncRead> FuturesIoAsyncReadExt for R {
 /// This trait requires the `futures-io` feature to be enabled.
 pub trait FuturesIoAsyncWriteExt {
     /// Wrap the writer with a newline-normalizing `AsyncWriter`.
-    fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncWriter<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> AsyncWriter<Self, N>
     where
         Self: Sized;
 }
 
 impl<W: AsyncWrite> FuturesIoAsyncWriteExt for W {
-    fn normalize_newlines<N: Normalize>(self, _: N) -> AsyncWriter<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> AsyncWriter<Self, N>
     where
         Self: Sized,
     {

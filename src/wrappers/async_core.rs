@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::{helpers::slice_to_uninit_mut, Normalize};
+use crate::{helpers::slice_to_uninit_mut, NormalizeChunk};
 
 pub trait AsyncReadCompat {
     fn poll_read(
@@ -24,11 +24,11 @@ pub struct ReadBuffer<N> {
     end_of_stream: bool,
 }
 
-impl<N: Normalize> ReadBuffer<N> {
+impl<N: NormalizeChunk> ReadBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::output_size_for(&input_buf);
+        let required = N::max_output_size_for_chunk(&input_buf, false, false);
         Self {
             _phantom: PhantomData,
             input_buf,
@@ -132,11 +132,11 @@ pub enum State {
     Finished,
 }
 
-impl<N: Normalize> WriteBuffer<N> {
+impl<N: NormalizeChunk> WriteBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::output_size_for(&input_buf);
+        let required = N::max_output_size_for_chunk(&input_buf, false, false);
         Self {
             _phantom: PhantomData,
             input_buf,

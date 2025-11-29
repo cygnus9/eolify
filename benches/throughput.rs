@@ -1,6 +1,6 @@
 use core::fmt;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use eolify::{helpers::vec_to_uninit_mut, Normalize, NormalizeChunkResult, CRLF, LF};
+use eolify::{helpers::vec_to_uninit_mut, NormalizeChunk, NormalizeChunkResult, CRLF, LF};
 use std::{mem::MaybeUninit, time::Duration};
 
 /// Generate buffers with a few different patterns:

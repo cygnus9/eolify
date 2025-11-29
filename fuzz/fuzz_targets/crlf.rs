@@ -1,6 +1,6 @@
 #![no_main]
 
-use eolify::{helpers::vec_to_uninit_mut, Error, Normalize, CRLF};
+use eolify::{helpers::vec_to_uninit_mut, Error, NormalizeChunk, CRLF};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

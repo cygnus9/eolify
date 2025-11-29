@@ -3,7 +3,7 @@ use std::{mem::MaybeUninit, ptr};
 use memchr::memchr2;
 
 use crate::{
-    formats::{Normalize, NormalizeChunkResult},
+    formats::{NormalizeChunk, NormalizeChunkResult},
     types::{CR, LF},
     Error, Result,
 };
@@ -13,13 +13,12 @@ use crate::{
 /// Will convert all line endings that are not CRLF (i.e. LF or CR alone) into CRLF.
 pub struct CRLF;
 
-impl Normalize for CRLF {
-    fn normalize_chunk(
+impl NormalizeChunk for CRLF {
+    fn max_output_size_for_chunk(
         input: &[u8],
-        output: &mut [MaybeUninit<u8>],
-        preceded_by_cr: bool,
+        _preceded_by_cr: bool,
         is_last_chunk: bool,
-    ) -> Result<NormalizeChunkResult> {
+    ) -> usize {
         // Worst case: every byte in input needs conversion, plus one extra byte for the
         // trailing CR from last chunk.
         //
@@ -36,7 +35,16 @@ impl Normalize for CRLF {
         // look at `is_last_chunk`. We could just require 2n + 1 bytes always, but that would be surprising for
         // callers that intuitively expect 2n to be sufficient in all cases, or at least when not processing the
         // last chunk.
-        let output_required = input.len() * 2 + usize::from(is_last_chunk);
+        input.len() * 2 + usize::from(is_last_chunk)
+    }
+
+    fn normalize_chunk(
+        input: &[u8],
+        output: &mut [MaybeUninit<u8>],
+        preceded_by_cr: bool,
+        is_last_chunk: bool,
+    ) -> Result<NormalizeChunkResult> {
+        let output_required = Self::max_output_size_for_chunk(input, preceded_by_cr, is_last_chunk);
         if output.len() < output_required {
             return Err(Error::OutputBufferTooSmall {
                 required: output_required,

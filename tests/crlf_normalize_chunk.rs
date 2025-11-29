@@ -1,4 +1,4 @@
-use eolify::{helpers::slice_to_uninit_mut, Normalize, CRLF};
+use eolify::{helpers::slice_to_uninit_mut, NormalizeChunk, CRLF};
 
 fn run(input: &[u8], preceded_by_cr: bool, is_last_chunk: bool) -> (Vec<u8>, bool) {
     let mut output = [0; 32];

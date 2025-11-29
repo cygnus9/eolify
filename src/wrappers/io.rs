@@ -6,7 +6,7 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{helpers::slice_to_uninit_mut, Normalize};
+use crate::{helpers::slice_to_uninit_mut, NormalizeChunk};
 
 /// A `std::io::Read` wrapper and implementation that normalizes newlines on-the-fly.
 pub struct Reader<R, N> {
@@ -20,10 +20,10 @@ pub struct Reader<R, N> {
     end_of_stream: bool,
 }
 
-impl<R: Read, N: Normalize> Reader<R, N> {
+impl<R: Read, N: NormalizeChunk> Reader<R, N> {
     pub fn new(reader: R, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::output_size_for(&input_buf);
+        let required = N::max_output_size_for_chunk(&input_buf, false, false);
         Self {
             _phantom: PhantomData,
             inner: reader,
@@ -70,7 +70,7 @@ impl<R: Read, N: Normalize> Reader<R, N> {
     }
 }
 
-impl<R: Read, N: Normalize> Read for Reader<R, N> {
+impl<R: Read, N: NormalizeChunk> Read for Reader<R, N> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.output_pos >= self.output_size {
             self.fill_buf()?;
@@ -97,10 +97,10 @@ pub struct Writer<W, S> {
     last_was_cr: bool,
 }
 
-impl<W: Write, N: Normalize> Writer<W, N> {
+impl<W: Write, N: NormalizeChunk> Writer<W, N> {
     pub fn new(inner: W, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::output_size_for(&input_buf);
+        let required = N::max_output_size_for_chunk(&input_buf, false, false);
         Self {
             _phantom: PhantomData,
             inner,
@@ -128,7 +128,7 @@ impl<W: Write, N: Normalize> Writer<W, N> {
     }
 }
 
-impl<W: Write, N: Normalize> Write for Writer<W, N> {
+impl<W: Write, N: NormalizeChunk> Write for Writer<W, N> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let mut source_buf = buf;
         let mut total_bytes = 0;
@@ -205,7 +205,7 @@ where
     fn wrap_writer_with_buffer_size<W: Write>(writer: W, buf_size: usize) -> Writer<W, Self>;
 }
 
-impl<N: Normalize> IoExt for N {
+impl<N: NormalizeChunk> IoExt for N {
     fn wrap_reader_with_buffer_size<R: Read>(reader: R, buf_size: usize) -> Reader<R, Self> {
         Reader::<R, Self>::new(reader, buf_size)
     }
@@ -218,13 +218,13 @@ impl<N: Normalize> IoExt for N {
 /// Extension trait to provide convenient methods on `std::io::Read`.
 pub trait ReadExt {
     /// Wrap the reader with a newline-normalizing `Reader`.
-    fn normalize_newlines<N: Normalize>(self, _: N) -> Reader<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> Reader<Self, N>
     where
         Self: Sized;
 }
 
 impl<R: Read> ReadExt for R {
-    fn normalize_newlines<N: Normalize>(self, _: N) -> Reader<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> Reader<Self, N>
     where
         Self: Sized,
     {
@@ -235,13 +235,13 @@ impl<R: Read> ReadExt for R {
 /// Extension trait to provide convenient methods on `std::io::Write`.
 pub trait WriteExt {
     /// Wrap the writer with a newline-normalizing `Writer`.
-    fn normalize_newlines<N: Normalize>(self, _: N) -> Writer<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> Writer<Self, N>
     where
         Self: Sized;
 }
 
 impl<W: Write> WriteExt for W {
-    fn normalize_newlines<N: Normalize>(self, _: N) -> Writer<Self, N>
+    fn normalize_newlines<N: NormalizeChunk>(self, _: N) -> Writer<Self, N>
     where
         Self: Sized,
     {

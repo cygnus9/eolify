@@ -3,7 +3,7 @@
 
 use std::mem::MaybeUninit;
 
-use crate::{helpers::vec_to_uninit_mut, Error, Result};
+use crate::{helpers::vec_to_uninit_mut, Result};
 
 pub(crate) mod crlf;
 pub(crate) mod lf;
@@ -43,12 +43,11 @@ impl NormalizeChunkResult {
     }
 }
 
-/// This is the core trait that defines how to normalize data to a specific format.
+/// This is the core trait that defines how to normalize a chunk data to a specific format.
 ///
-/// Implementors must provide the `normalize_chunk` method which performs the actual
-/// normalization logic. All other methods have default implementations based on
-/// `normalize_chunk`. They can be overridden if appropriate.
-pub trait Normalize {
+/// Consumers will typically not use this trait directly, but rather the higher-level
+/// `Normalize` trait.
+pub trait NormalizeChunk {
     /// Normalize a single chunk of input to the required format into the provided `output` buffer.
     ///
     /// Parameters:
@@ -73,24 +72,26 @@ pub trait Normalize {
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult>;
 
-    /// Returns the required output buffer size for the given input buffer.
-    ///
-    /// The default implementation calls `normalize_chunk` with an empty output buffer
-    /// to determine the worst-case required size.
+    /// Returns the worst-case required output buffer size for the given input buffer.
     #[must_use]
-    fn output_size_for(input: &[u8]) -> usize {
-        let Err(Error::OutputBufferTooSmall { required }) =
-            Self::normalize_chunk(input, &mut [], false, true)
-        else {
-            unreachable!("output buffer should be too small when passing empty buffer");
-        };
-        required
-    }
+    fn max_output_size_for_chunk(input: &[u8], preceded_by_cr: bool, is_last_chunk: bool) -> usize;
+}
 
+/// This is the trait that consumers will typically use to normalize vectors or
+/// string slices to a specific format.
+pub trait Normalize {
     /// Normalize the entire input buffer and return a newly allocated `Vec<u8>` with the result.
     #[must_use]
+    fn normalize(input: &[u8]) -> Vec<u8>;
+
+    /// Normalize the entire input string and return a newly allocated `String` with the result.
+    #[must_use]
+    fn normalize_str(input: &str) -> String;
+}
+
+impl<N: NormalizeChunk> Normalize for N {
     fn normalize(input: &[u8]) -> Vec<u8> {
-        let mut output = Vec::with_capacity(Self::output_size_for(input));
+        let mut output = Vec::with_capacity(Self::max_output_size_for_chunk(input, false, true));
         let status = Self::normalize_chunk(input, vec_to_uninit_mut(&mut output), false, true)
             .unwrap_or_else(|err| unreachable!("{err} (should be impossible)",));
 
@@ -102,8 +103,6 @@ pub trait Normalize {
         output
     }
 
-    /// Normalize the entire input string and return a newly allocated `String` with the result.
-    #[must_use]
     fn normalize_str(input: &str) -> String {
         // SAFETY: normalize returns valid UTF-8 when given valid UTF-8 input because we only
         // insert ASCII CR/LF bytes.

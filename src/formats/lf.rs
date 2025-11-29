@@ -2,21 +2,29 @@ use std::{mem::MaybeUninit, ptr};
 
 use memchr::memchr;
 
-use crate::{formats::NormalizeChunkResult, types, Normalize, Result};
+use crate::{types, NormalizeChunk, NormalizeChunkResult, Result};
 
 /// LF normalization format implementation.
 ///
 /// Will convert all line endings that are not LF (i.e. CRLF or CR alone) into LF.
 pub struct LF;
 
-impl Normalize for LF {
+impl NormalizeChunk for LF {
+    fn max_output_size_for_chunk(
+        input: &[u8],
+        _preceded_by_cr: bool,
+        _is_last_chunk: bool,
+    ) -> usize {
+        input.len()
+    }
+
     fn normalize_chunk(
         input: &[u8],
         output: &mut [MaybeUninit<u8>],
         preceded_by_cr: bool,
         is_last_chunk: bool,
     ) -> Result<NormalizeChunkResult> {
-        let output_required = input.len();
+        let output_required = Self::max_output_size_for_chunk(input, preceded_by_cr, is_last_chunk);
         if output.len() < output_required {
             return Err(crate::Error::OutputBufferTooSmall {
                 required: output_required,
