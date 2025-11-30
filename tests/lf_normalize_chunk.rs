@@ -5,13 +5,13 @@ fn run(input: &[u8], preceded_by_cr: bool, is_last_chunk: bool) -> (Vec<u8>, boo
     let status = LF::normalize_chunk(
         input,
         slice_to_uninit_mut(&mut output),
-        preceded_by_cr,
+        Some(&preceded_by_cr),
         is_last_chunk,
     )
     .unwrap();
     (
         output[..status.output_len()].to_vec(),
-        status.ended_with_cr(),
+        status.state().copied().unwrap(),
     )
 }
 

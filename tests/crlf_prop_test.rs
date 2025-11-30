@@ -11,14 +11,14 @@ proptest! {
 
         // allocate safe upper-bound buffers
         let mut out1 = Vec::with_capacity(a.len() * 2);
-        let status1 = CRLF::normalize_chunk(a, vec_to_uninit_mut(&mut out1), false, false)
+        let status1 = CRLF::normalize_chunk(a, vec_to_uninit_mut(&mut out1), None, false)
             .expect("output buffer too small for first chunk");
           unsafe {
             out1.set_len(status1.output_len());
         }
 
         let mut out2 = Vec::with_capacity(b.len() * 2 + 1);
-        let status2 = CRLF::normalize_chunk(b, vec_to_uninit_mut(&mut out2), status1.ended_with_cr(), true)
+        let status2 = CRLF::normalize_chunk(b, vec_to_uninit_mut(&mut out2), status1.state(), true)
             .expect("output buffer too small for second chunk");
         unsafe {
             out2.set_len(status2.output_len());
@@ -37,7 +37,7 @@ proptest! {
                 let c = out1[i];
                 if c == b'\r' {
                     if i == out1.len() - 1 {
-                        prop_assert!(status1.ended_with_cr(), "out1 ends with CR but status1.ended_with_cr is false");
+                        prop_assert!(status1.state().copied().unwrap(), "out1 ends with CR but status1.ended_with_cr is false");
                     } else {
                         prop_assert!(out1[i + 1] == b'\n', "found lone CR in out1 at {}", i);
                     }
@@ -47,7 +47,7 @@ proptest! {
             }
         } else {
             // empty out1 must reflect ended_with_cr == false (since we passed preceded_by_cr=false)
-            prop_assert!(!status1.ended_with_cr() || a.is_empty(), "empty out1 with ended_with_cr true");
+            prop_assert!(!status1.state().copied().unwrap() || a.is_empty(), "empty out1 with ended_with_cr true");
         }
 
         // out2: no lone LF/CR, except possible leading LF if status1.ended_with_cr is true,
@@ -57,13 +57,13 @@ proptest! {
                 let c = out2[i];
                 if c == b'\r' {
                     if i == out2.len() - 1 {
-                        prop_assert!(status2.ended_with_cr(), "out2 ends with CR but status2.ended_with_cr is false");
+                        prop_assert!(status2.state().copied().unwrap(), "out2 ends with CR but status2.ended_with_cr is false");
                     } else {
                         prop_assert!(out2[i + 1] == b'\n', "found lone CR in out2 at {}", i);
                     }
                 } else if c == b'\n' {
                     if i == 0 {
-                        prop_assert!(status1.ended_with_cr(), "out2 starts with LF but status1.ended_with_cr is false");
+                        prop_assert!(status1.state().copied().unwrap(), "out2 starts with LF but status1.ended_with_cr is false");
                     } else {
                         prop_assert!(out2[i - 1] == b'\r', "found lone LF in out2 at {}", i);
                     }
@@ -89,7 +89,7 @@ proptest! {
     fn normalize_chunk_idempotent(data in vec(any::<u8>(), 0..256)) {
         // First normalization
         let mut out1 = Vec::with_capacity(data.len() * 2 + 1);
-        let status1 = CRLF::normalize_chunk(&data, vec_to_uninit_mut(&mut out1), false, true)
+        let status1 = CRLF::normalize_chunk(&data, vec_to_uninit_mut(&mut out1), None, true)
             .expect("output buffer too small for first normalization");
         unsafe {
             out1.set_len(status1.output_len());
@@ -107,7 +107,7 @@ proptest! {
 
         // Second normalization
         let mut out2 = Vec::with_capacity(out1.len() * 2 + 1);
-        let status2 = CRLF::normalize_chunk(&out1, vec_to_uninit_mut(&mut out2), false, true)
+        let status2 = CRLF::normalize_chunk(&out1, vec_to_uninit_mut(&mut out2), None, true)
             .expect("output buffer too small for second normalization");
         unsafe {
             out2.set_len(status2.output_len());

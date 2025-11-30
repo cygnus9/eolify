@@ -27,7 +27,7 @@ fuzz_target!(|data: &[u8]| {
         LF::normalize_chunk(
             payload,
             vec_to_uninit_mut(&mut out),
-            preceded_by_cr,
+            Some(&preceded_by_cr),
             is_last_chunk,
         ),
         undersize && !payload.is_empty(),

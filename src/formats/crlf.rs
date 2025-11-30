@@ -14,9 +14,11 @@ use crate::{
 pub struct CRLF;
 
 impl NormalizeChunk for CRLF {
+    type State = bool;
+
     fn max_output_size_for_chunk(
         chunk_size: usize,
-        _preceded_by_cr: bool,
+        _state: Option<&Self::State>,
         is_last_chunk: bool,
     ) -> usize {
         // Worst case: every byte in input needs conversion, plus one extra byte for the
@@ -41,20 +43,21 @@ impl NormalizeChunk for CRLF {
     fn normalize_chunk(
         input: &[u8],
         output: &mut [MaybeUninit<u8>],
-        preceded_by_cr: bool,
+        state: Option<&Self::State>,
         is_last_chunk: bool,
-    ) -> Result<NormalizeChunkResult> {
-        let output_required =
-            Self::max_output_size_for_chunk(input.len(), preceded_by_cr, is_last_chunk);
+    ) -> Result<NormalizeChunkResult<Self::State>> {
+        let output_required = Self::max_output_size_for_chunk(input.len(), state, is_last_chunk);
         if output.len() < output_required {
             return Err(Error::OutputBufferTooSmall {
                 required: output_required,
             });
         }
 
+        let preceded_by_cr = state.copied().unwrap_or(false);
+
         if input.is_empty() && !is_last_chunk {
             // Special case: empty input and not last chunk
-            return Ok(NormalizeChunkResult::new(0, preceded_by_cr));
+            return Ok(NormalizeChunkResult::new(0, Some(preceded_by_cr)));
         }
 
         let mut scan_pos = 0;
@@ -125,7 +128,7 @@ impl NormalizeChunk for CRLF {
                         }
                         break Ok(NormalizeChunkResult::new(
                             write_pos + bytes_now + usize::from(is_last_chunk),
-                            !is_last_chunk,
+                            Some(!is_last_chunk),
                         ));
                     }
                     _ => unreachable!("unreachable pattern match case"),
@@ -143,7 +146,10 @@ impl NormalizeChunk for CRLF {
                         bytes_now,
                     );
                 }
-                break Ok(NormalizeChunkResult::new(write_pos + bytes_now, false));
+                break Ok(NormalizeChunkResult::new(
+                    write_pos + bytes_now,
+                    Some(false),
+                ));
             }
         }
     }

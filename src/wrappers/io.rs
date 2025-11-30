@@ -9,21 +9,21 @@ use std::{
 use crate::{helpers::slice_to_uninit_mut, NormalizeChunk};
 
 /// A `std::io::Read` wrapper and implementation that normalizes newlines on-the-fly.
-pub struct Reader<R, N> {
+pub struct Reader<R, N: NormalizeChunk> {
     _phantom: PhantomData<N>,
     inner: R,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     output_pos: usize,
     output_size: usize,
-    last_was_cr: bool,
+    state: Option<N::State>,
     end_of_stream: bool,
 }
 
 impl<R: Read, N: NormalizeChunk> Reader<R, N> {
     pub fn new(reader: R, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(buf_size, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, None, false);
         Self {
             _phantom: PhantomData,
             inner: reader,
@@ -31,7 +31,7 @@ impl<R: Read, N: NormalizeChunk> Reader<R, N> {
             output_buf: vec![0; required].into_boxed_slice(),
             output_pos: 0,
             output_size: 0,
-            last_was_cr: false,
+            state: None,
             end_of_stream: false,
         }
     }
@@ -55,13 +55,13 @@ impl<R: Read, N: NormalizeChunk> Reader<R, N> {
         let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
             slice_to_uninit_mut(&mut self.output_buf),
-            self.last_was_cr,
+            self.state.as_ref(),
             is_last_chunk,
         )
         .map_err(std::io::Error::other)?;
 
         self.output_size = status.output_len();
-        self.last_was_cr = status.ended_with_cr();
+        self.state = status.state().cloned();
         Ok(())
     }
 
@@ -88,26 +88,26 @@ impl<R: Read, N: NormalizeChunk> Read for Reader<R, N> {
 }
 
 /// A `std::io::Write` wrapper and implementation that normalizes newlines on-the-fly.
-pub struct Writer<W, S> {
+pub struct Writer<W, S: NormalizeChunk> {
     _phantom: PhantomData<S>,
     inner: W,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     input_pos: usize,
-    last_was_cr: bool,
+    state: Option<S::State>,
 }
 
 impl<W: Write, N: NormalizeChunk> Writer<W, N> {
     pub fn new(inner: W, buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(buf_size, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, None, false);
         Self {
             _phantom: PhantomData,
             inner,
             input_buf,
             output_buf: vec![0; required].into_boxed_slice(),
             input_pos: 0,
-            last_was_cr: false,
+            state: None,
         }
     }
 
@@ -117,7 +117,7 @@ impl<W: Write, N: NormalizeChunk> Writer<W, N> {
         let status = N::normalize_chunk(
             &this.input_buf[..this.input_pos],
             slice_to_uninit_mut(&mut this.output_buf),
-            this.last_was_cr,
+            this.state.as_ref(),
             true, // this is the last chunk
         )
         .map_err(std::io::Error::other)?;
@@ -150,14 +150,14 @@ impl<W: Write, N: NormalizeChunk> Write for Writer<W, N> {
             let status = N::normalize_chunk(
                 &self.input_buf,
                 slice_to_uninit_mut(&mut self.output_buf),
-                self.last_was_cr,
+                self.state.as_ref(),
                 false,
             )
             .map_err(std::io::Error::other)?;
 
             self.inner
                 .write_all(&self.output_buf[..status.output_len()])?;
-            self.last_was_cr = status.ended_with_cr();
+            self.state = status.state().cloned();
             self.input_pos = 0;
         }
         Ok(total_bytes)
@@ -167,7 +167,7 @@ impl<W: Write, N: NormalizeChunk> Write for Writer<W, N> {
         let status = N::normalize_chunk(
             &self.input_buf[..self.input_pos],
             slice_to_uninit_mut(&mut self.output_buf),
-            self.last_was_cr,
+            self.state.as_ref(),
             false, // flush is not neccesarily the end of stream
         )
         .map_err(std::io::Error::other)?;
@@ -175,7 +175,7 @@ impl<W: Write, N: NormalizeChunk> Write for Writer<W, N> {
         if status.output_len() > 0 {
             self.inner
                 .write_all(&self.output_buf[..status.output_len()])?;
-            self.last_was_cr = status.ended_with_cr();
+            self.state = status.state().cloned();
             self.input_pos = 0;
         }
         self.inner.flush()
@@ -186,7 +186,7 @@ impl<W: Write, N: NormalizeChunk> Write for Writer<W, N> {
 /// and `std::io::Write`.
 pub trait IoExt
 where
-    Self: Sized,
+    Self: Sized + NormalizeChunk,
 {
     /// Wrap a reader with a newline-normalizing `Reader`.
     fn wrap_reader<R: Read>(reader: R) -> Reader<R, Self> {

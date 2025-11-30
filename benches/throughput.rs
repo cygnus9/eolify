@@ -69,12 +69,12 @@ impl Format {
         &self,
         input: &[u8],
         output: &mut [MaybeUninit<u8>],
-        preceded_by_cr: bool,
+        state: Option<&bool>,
         is_last_chunk: bool,
-    ) -> eolify::Result<NormalizeChunkResult> {
+    ) -> eolify::Result<NormalizeChunkResult<bool>> {
         match self {
-            Format::CRLF => CRLF::normalize_chunk(input, output, preceded_by_cr, is_last_chunk),
-            Format::LF => LF::normalize_chunk(input, output, preceded_by_cr, is_last_chunk),
+            Format::CRLF => CRLF::normalize_chunk(input, output, state, is_last_chunk),
+            Format::LF => LF::normalize_chunk(input, output, state, is_last_chunk),
         }
     }
 }
@@ -101,10 +101,10 @@ fn bench_throughput(c: &mut Criterion) {
                     let mut out = Vec::with_capacity(data.len() * 3 + 8);
                     b.iter(|| {
                         let status = format
-                            .normalize_chunk(data, vec_to_uninit_mut(&mut out), false, false)
+                            .normalize_chunk(data, vec_to_uninit_mut(&mut out), None, false)
                             .unwrap();
                         std::hint::black_box(status.output_len());
-                        std::hint::black_box(status.ended_with_cr());
+                        std::hint::black_box(status.state());
                     })
                 });
             }
@@ -134,21 +134,21 @@ fn bench_throughput(c: &mut Criterion) {
                 group2.bench_with_input(id, &data, |b, input| {
                     // out is captured from outer scope and reused; avoid allocating inside iter.
                     b.iter(|| {
-                        let mut last_was_cr = false;
+                        let mut state = None;
                         // process the buffer in fixed-size chunks; pass last flag across chunks
                         for ch in input.chunks(chunk) {
                             let status = format
                                 .normalize_chunk(
                                     ch,
                                     vec_to_uninit_mut(&mut out),
-                                    last_was_cr,
+                                    state.as_ref(),
                                     false,
                                 )
                                 .unwrap();
                             std::hint::black_box(status.output_len());
-                            last_was_cr = status.ended_with_cr();
+                            state = status.state().copied();
                         }
-                        std::hint::black_box(last_was_cr);
+                        std::hint::black_box(state);
                     })
                 });
             }

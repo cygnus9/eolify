@@ -14,13 +14,13 @@ pub trait AsyncReadCompat {
     ) -> Poll<std::io::Result<usize>>;
 }
 
-pub struct ReadBuffer<N> {
+pub struct ReadBuffer<N: NormalizeChunk> {
     _phantom: PhantomData<N>,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     output_pos: usize,
     output_size: usize,
-    last_was_cr: bool,
+    state: Option<N::State>,
     end_of_stream: bool,
 }
 
@@ -28,14 +28,14 @@ impl<N: NormalizeChunk> ReadBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(buf_size, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, None, false);
         Self {
             _phantom: PhantomData,
             input_buf,
             output_buf: vec![0; required].into_boxed_slice(),
             output_pos: 0,
             output_size: 0,
-            last_was_cr: false,
+            state: None,
             end_of_stream: false,
         }
     }
@@ -92,13 +92,13 @@ impl<N: NormalizeChunk> ReadBuffer<N> {
         let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
             slice_to_uninit_mut(&mut self.output_buf),
-            self.last_was_cr,
+            self.state.as_ref(),
             is_last_chunk,
         )
         .map_err(std::io::Error::other)?;
 
         self.output_size = status.output_len();
-        self.last_was_cr = status.ended_with_cr();
+        self.state = status.state().cloned();
         Poll::Ready(Ok(()))
     }
 }
@@ -115,15 +115,15 @@ pub trait AsyncWriteCompat {
     fn poll_finish(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>>;
 }
 
-pub struct WriteBuffer<N> {
+pub struct WriteBuffer<N: NormalizeChunk> {
     _phantom: std::marker::PhantomData<N>,
     input_buf: Box<[u8]>,
     output_buf: Box<[u8]>,
     input_pos: usize,
     output_pos: usize,
     output_size: usize,
-    last_was_cr: bool,
-    state: State,
+    state: Option<N::State>,
+    stream_state: State,
 }
 
 pub enum State {
@@ -136,7 +136,7 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
         let input_buf = vec![0; buf_size].into_boxed_slice();
-        let required = N::max_output_size_for_chunk(buf_size, false, false);
+        let required = N::max_output_size_for_chunk(buf_size, None, false);
         Self {
             _phantom: PhantomData,
             input_buf,
@@ -144,8 +144,8 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
             input_pos: 0,
             output_pos: 0,
             output_size: 0,
-            last_was_cr: false,
-            state: State::Writing,
+            state: None,
+            stream_state: State::Writing,
         }
     }
 
@@ -191,12 +191,12 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
                 let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
                     slice_to_uninit_mut(&mut self.output_buf),
-                    self.last_was_cr,
+                    self.state.as_ref(),
                     false,
                 )
                 .map_err(std::io::Error::other)?;
 
-                self.last_was_cr = status.ended_with_cr();
+                self.state = status.state().cloned();
                 self.output_size = status.output_len();
                 self.input_pos = 0;
             }
@@ -215,12 +215,12 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
                 let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
                     slice_to_uninit_mut(&mut self.output_buf),
-                    self.last_was_cr,
+                    self.state.as_ref(),
                     finish,
                 )
                 .map_err(std::io::Error::other)?;
 
-                self.last_was_cr = status.ended_with_cr();
+                self.state = status.state().cloned();
                 self.output_size = status.output_len();
                 self.input_pos = 0;
 
@@ -257,18 +257,18 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
         cx: &mut Context<'_>,
         mut inner: Pin<&mut W>,
     ) -> Poll<std::io::Result<()>> {
-        if let State::Writing = self.state {
+        if let State::Writing = self.stream_state {
             match self.poll_flush(cx, inner.as_mut(), true) {
                 Poll::Ready(Ok(())) => {}
                 other => return other,
             }
-            self.state = State::Finishing;
+            self.stream_state = State::Finishing;
         }
 
-        if let State::Finishing = self.state {
+        if let State::Finishing = self.stream_state {
             match inner.poll_finish(cx) {
                 Poll::Ready(Ok(())) => {
-                    self.state = State::Finished;
+                    self.stream_state = State::Finished;
                 }
                 other => return other,
             }

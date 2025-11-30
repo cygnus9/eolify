@@ -17,7 +17,7 @@ use crate::{
 
 pin_project! {
     /// An `future::io::AsyncRead` wrapper and implementation that normalizes newlines on-the-fly.
-    pub struct AsyncReader<R, N> {
+    pub struct AsyncReader<R, N: NormalizeChunk> {
         #[pin]
         reader: R,
         buf: ReadBuffer<N>,
@@ -64,7 +64,7 @@ impl<R: AsyncRead, N: NormalizeChunk> AsyncRead for AsyncReader<R, N> {
 
 pin_project! {
     /// An `future::io::AsyncWrite` wrapper and implementation that normalizes newlines on-the-fly.
-    pub struct AsyncWriter<W, N> {
+    pub struct AsyncWriter<W, N: NormalizeChunk> {
         #[pin]
         writer: W,
         buf: WriteBuffer<N>,
@@ -90,7 +90,7 @@ impl<W: AsyncWrite + Unpin, N: NormalizeChunk> AsyncWriter<W, N> {
 }
 
 pin_project! {
-struct Finisher<W, N> {
+struct Finisher<W, N: NormalizeChunk> {
     #[pin]
     writer: Option<W>,
     buf: WriteBuffer<N>,
@@ -174,7 +174,7 @@ impl<W: AsyncWrite, N: NormalizeChunk> AsyncWrite for AsyncWriter<W, N> {
 /// This trait requires the `futures-io` feature to be enabled.
 pub trait FuturesIoExt
 where
-    Self: Sized,
+    Self: Sized + NormalizeChunk,
 {
     /// Wrap a reader with a newline-normalizing `AsyncReader`.
     fn wrap_async_reader<R: AsyncRead>(reader: R) -> AsyncReader<R, Self> {

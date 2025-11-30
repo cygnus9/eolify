@@ -11,19 +11,16 @@ pub(crate) mod lf;
 /// Result returned by `normalize_chunk` describing how many bytes were
 /// written and whether the chunk ended with a `\r`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NormalizeChunkResult {
+pub struct NormalizeChunkResult<S: Sized> {
     output_len: usize,
-    ended_with_cr: bool,
+    state: Option<S>,
 }
 
-impl NormalizeChunkResult {
+impl<S> NormalizeChunkResult<S> {
     /// Construct a new `NormalizeChunkResult`.
     #[must_use]
-    pub fn new(output_len: usize, ended_with_cr: bool) -> Self {
-        Self {
-            output_len,
-            ended_with_cr,
-        }
+    pub fn new(output_len: usize, state: Option<S>) -> Self {
+        Self { output_len, state }
     }
 
     /// Returns the number of bytes written into the output buffer for the
@@ -38,8 +35,8 @@ impl NormalizeChunkResult {
     /// If `true`, the next invocation of `normalize_chunk` should have `preceded_by_cr`
     /// set to `true` to properly handle a possible leading `\n`.
     #[must_use]
-    pub fn ended_with_cr(&self) -> bool {
-        self.ended_with_cr
+    pub fn state(&self) -> Option<&S> {
+        self.state.as_ref()
     }
 }
 
@@ -48,6 +45,8 @@ impl NormalizeChunkResult {
 /// Consumers will typically not use this trait directly, but rather the higher-level
 /// `Normalize` trait.
 pub trait NormalizeChunk {
+    type State: Clone + Sized;
+
     /// Normalize a single chunk of input to the required format into the provided `output` buffer.
     ///
     /// Parameters:
@@ -68,15 +67,15 @@ pub trait NormalizeChunk {
     fn normalize_chunk(
         input: &[u8],
         output: &mut [MaybeUninit<u8>],
-        preceded_by_cr: bool,
+        state: Option<&Self::State>,
         is_last_chunk: bool,
-    ) -> Result<NormalizeChunkResult>;
+    ) -> Result<NormalizeChunkResult<Self::State>>;
 
-    /// Returns the worst-case required output buffer size for the given chunk_size.
+    /// Returns the worst-case required output buffer size for the given `chunk_size`.
     #[must_use]
     fn max_output_size_for_chunk(
         chunk_size: usize,
-        preceded_by_cr: bool,
+        state: Option<&Self::State>,
         is_last_chunk: bool,
     ) -> usize;
 }
@@ -96,8 +95,8 @@ pub trait Normalize {
 impl<N: NormalizeChunk> Normalize for N {
     fn normalize(input: &[u8]) -> Vec<u8> {
         let mut output =
-            Vec::with_capacity(Self::max_output_size_for_chunk(input.len(), false, true));
-        let status = Self::normalize_chunk(input, vec_to_uninit_mut(&mut output), false, true)
+            Vec::with_capacity(Self::max_output_size_for_chunk(input.len(), None, true));
+        let status = Self::normalize_chunk(input, vec_to_uninit_mut(&mut output), None, true)
             .unwrap_or_else(|err| unreachable!("{err} (should be impossible)",));
 
         // SAFETY: We trust that the implementation of normalize_chunk correctly
