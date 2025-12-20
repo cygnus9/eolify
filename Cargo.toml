@@ -49,3 +49,6 @@ tokio = ["dep:tokio", "dep:pin-project-lite"]
 [[example]]
 name = "tokio_file_convert"
 required-features = ["tokio"]
+
+[package.metadata."docs.rs"]
+all-features = true

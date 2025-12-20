@@ -60,10 +60,35 @@ Add to your Cargo.toml:
 
 ```toml
 [dependencies]
-eolify = "0.3"
+eolify = { version = "0.3", features = ["tokio"] }
+
+# Alternatively enable the `futures-io` async wrappers instead of `tokio`:
+# eolify = { version = "0.3", features = ["futures-io"] }
 ```
 
 Then either call the high-level string routines (for small chunks) or use the I/O wrappers for streaming use-cases.
+
+### Asynchronous I/O (Tokio)
+
+Enable the `tokio` feature (see Cargo snippet above) and use the `TokioAsyncReadExt` / `TokioAsyncWriteExt` helpers:
+
+```nocompile
+use tokio::fs::File;
+use tokio::io::{AsyncWriteExt, BufWriter};
+use eolify::{CRLF, TokioAsyncReadExt};
+
+async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::Result<()> {
+  let infile = File::open(input_path).await?;
+  let mut reader = infile.normalize_newlines(CRLF);
+
+  let outfile = File::create(output_path).await?;
+  let mut writer = BufWriter::new(outfile);
+
+  tokio::io::copy(&mut reader, &mut writer).await?;
+  writer.shutdown().await?;
+  Ok(())
+}
+```
 
 ## License
 
