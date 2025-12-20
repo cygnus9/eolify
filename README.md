@@ -93,3 +93,37 @@ async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::R
 ## License
 
 MIT or Apache-2.0, at your option.
+
+## Upgrade notes (0.3.x → 0.4.0)
+
+If you are upgrading from `0.3.x` to `0.4.0` there are API changes you
+need to address if you used the low-level chunked normalization API:
+
+- The old `Normalize` chunk trait was refactored into `NormalizeChunk` and
+  a convenience `Normalize` impl now exists for whole-buffer operations.
+- `normalize_chunk` now takes an output buffer of `MaybeUninit<u8>` and an
+  optional `state: Option<&Self::State>` instead of `preceded_by_cr: bool`.
+  Implementations should use the associated `State` type to track any
+  carried state (e.g. whether the previous chunk ended with `\r`).
+- The result type `NormalizeChunkResult` now returns `state()` to retrieve
+  the next chunk state (previously `ended_with_cr()` boolean).
+- Use `max_output_size_for_chunk(chunk_size, state, is_last_chunk)` to
+  allocate output buffers with proper capacity before calling
+  `normalize_chunk`.
+
+Example migration pattern (pseudo-Rust):
+
+```nocompile
+// old (0.3.x)
+let mut out = vec![0u8; input.len()];
+let status = LF::normalize_chunk(input, &mut out, preceded_by_cr, true)?;
+
+// new (0.4.0)
+let mut out = Vec::with_capacity(Self::max_output_size_for_chunk(input.len(), None, true));
+let status = LF::normalize_chunk(input, vec_to_uninit_mut(&mut out), None, true)?;
+unsafe { out.set_len(status.output_len()); }
+let state = status.state();
+```
+
+If you only used the higher-level `normalize` or `normalize_str` helpers,
+no changes are required.
