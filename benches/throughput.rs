@@ -15,9 +15,9 @@ fn make_buffer(size: usize, pattern: &str) -> Vec<u8> {
         "random" => {
             // simple LCG to avoid extra deps
             let mut state: u64 = 0x12345678;
-            for i in 0..size {
+            for byte in &mut v {
                 state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
-                v[i] = (state & 0xFF) as u8;
+                *byte = (state & 0xFF) as u8;
             }
         }
         "all_lf" => {
@@ -31,13 +31,13 @@ fn make_buffer(size: usize, pattern: &str) -> Vec<u8> {
             }
         }
         "crlf" => {
-            for i in 0..size {
-                v[i] = if i % 2 == 0 { b'\r' } else { b'\n' };
+            for (i, byte) in v.iter_mut().enumerate() {
+                *byte = if i % 2 == 0 { b'\r' } else { b'\n' };
             }
         }
         "mixed" => {
-            for i in 0..size {
-                v[i] = match i % 7 {
+            for (i, byte) in v.iter_mut().enumerate() {
+                *byte = match i % 7 {
                     0 => b'\r',
                     1 => b'\n',
                     2 => b'a',
@@ -51,14 +51,14 @@ fn make_buffer(size: usize, pattern: &str) -> Vec<u8> {
 }
 
 enum Format {
-    CRLF,
+    Crlf,
     LF,
 }
 
 impl fmt::Display for Format {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Format::CRLF => write!(f, "crlf"),
+            Format::Crlf => write!(f, "crlf"),
             Format::LF => write!(f, "lf"),
         }
     }
@@ -73,14 +73,14 @@ impl Format {
         is_last_chunk: bool,
     ) -> eolify::Result<NormalizeChunkResult<bool>> {
         match self {
-            Format::CRLF => CRLF::normalize_chunk(input, output, state, is_last_chunk),
+            Format::Crlf => CRLF::normalize_chunk(input, output, state, is_last_chunk),
             Format::LF => LF::normalize_chunk(input, output, state, is_last_chunk),
         }
     }
 }
 
 fn bench_throughput(c: &mut Criterion) {
-    let formats = [Format::CRLF, Format::LF];
+    let formats = [Format::Crlf, Format::LF];
 
     for format in formats {
         let mut group1 = c.benchmark_group(format!("{format}_throughput"));

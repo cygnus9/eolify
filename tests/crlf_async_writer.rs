@@ -1,5 +1,96 @@
 #![cfg(any(feature = "futures-io", feature = "tokio"))]
 
+use std::{
+    pin::Pin,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    task::{Context, Poll},
+};
+
+struct ZeroWriter;
+
+struct FlushCounterWriter(Arc<AtomicUsize>);
+
+#[cfg(feature = "futures-io")]
+impl futures_io::AsyncWrite for ZeroWriter {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(0))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[cfg(feature = "futures-io")]
+impl futures_io::AsyncWrite for FlushCounterWriter {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl tokio::io::AsyncWrite for ZeroWriter {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(0))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl tokio::io::AsyncWrite for FlushCounterWriter {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Poll::Ready(Ok(buf.len()))
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
 macro_rules! dual_test {
     ($name:ident, $body:block) => {
         mod $name {
@@ -64,4 +155,20 @@ dual_test!(trailing_cr_at_eof_emits_crlf, {
     writer.write_all(b"foo\r").await.unwrap();
     let out = writer.finish().await.unwrap();
     assert_eq!(out, b"foo\r\n".to_vec());
+});
+
+dual_test!(inner_zero_write_returns_write_zero, {
+    let mut writer = CRLF::wrap_async_writer_with_buffer_size(super::ZeroWriter, 1);
+    let err = writer.write_all(b"\n").await.unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::WriteZero);
+});
+
+dual_test!(flush_reaches_inner_writer_without_pending_output, {
+    let flushes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let mut writer =
+        CRLF::wrap_async_writer_with_buffer_size(super::FlushCounterWriter(flushes.clone()), 4);
+
+    writer.flush().await.unwrap();
+
+    assert_eq!(flushes.load(std::sync::atomic::Ordering::SeqCst), 1);
 });

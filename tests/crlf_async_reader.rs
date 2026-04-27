@@ -85,10 +85,7 @@ pub struct AsyncTestReader<R, I> {
 impl<R, I: Iterator<Item = R>> AsyncTestReader<R, I> {
     pub fn new(mut readers: I) -> AsyncTestReader<R, I> {
         let current = readers.next();
-        AsyncTestReader {
-            readers: readers,
-            current: current,
-        }
+        AsyncTestReader { readers, current }
     }
 }
 

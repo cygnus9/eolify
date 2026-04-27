@@ -7,7 +7,7 @@
 
 ## Features  
 - Fast and memory-efficient — optimized for bulk text processing.  
-- Normalizes EOLs to a consistent format (currently CRLF `\r\n`).
+- Normalizes EOLs to a consistent format: CRLF (`\r\n`) or LF (`\n`).
 - Minimal dependencies — ideal for embedding in performance-critical code.  
 - Handles mixed endings (`\n`, `\r\n`, `\r`) gracefully.  
 - Supports:  
@@ -60,15 +60,15 @@ Add to your Cargo.toml:
 
 ```toml
 [dependencies]
-eolify = { version = "0.3", features = ["tokio"] }
+eolify = { version = "0.4", features = ["tokio"] }
 
 # Alternatively enable the `futures-io` async wrappers instead of `tokio`:
-# eolify = { version = "0.3", features = ["futures-io"] }
+# eolify = { version = "0.4", features = ["futures-io"] }
 ```
 
 Then either call the high-level string routines (for small chunks) or use the I/O wrappers for streaming use-cases.
 
-### Asynchronous I/O (Tokio)
+### Asynchronous I/O
 
 Enable the `tokio` feature (see Cargo snippet above) and use the `TokioAsyncReadExt` / `TokioAsyncWriteExt` helpers:
 
@@ -89,6 +89,9 @@ async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::R
   Ok(())
 }
 ```
+
+For `futures-io`, enable the `futures-io` feature and use the equivalent
+`FuturesIoAsyncReadExt` / `FuturesIoAsyncWriteExt` helpers.
 
 ## License
 

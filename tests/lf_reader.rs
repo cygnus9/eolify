@@ -70,10 +70,7 @@ pub struct TestReader<R, I> {
 impl<R: Read, I: Iterator<Item = R>> TestReader<R, I> {
     pub fn new(mut readers: I) -> TestReader<R, I> {
         let current = readers.next();
-        TestReader {
-            readers: readers,
-            current: current,
-        }
+        TestReader { readers, current }
     }
 }
 

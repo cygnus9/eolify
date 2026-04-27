@@ -13,7 +13,7 @@ proptest! {
         let mut out1 = Vec::with_capacity(a.len() * 2);
         let status1 = CRLF::normalize_chunk(a, vec_to_uninit_mut(&mut out1), None, false)
             .expect("output buffer too small for first chunk");
-          unsafe {
+        unsafe {
             out1.set_len(status1.output_len());
         }
 
@@ -33,8 +33,7 @@ proptest! {
 
         // out1: no lone LF/CR, except possible trailing CR which must match status1.ended_with_cr
         if !out1.is_empty() {
-            for i in 0..out1.len() {
-                let c = out1[i];
+            for (i, &c) in out1.iter().enumerate() {
                 if c == b'\r' {
                     if i == out1.len() - 1 {
                         prop_assert!(status1.state().copied().unwrap(), "out1 ends with CR but status1.ended_with_cr is false");
@@ -53,8 +52,7 @@ proptest! {
         // out2: no lone LF/CR, except possible leading LF if status1.ended_with_cr is true,
         // and possible trailing CR if status2.ended_with_cr is true.
         if !out2.is_empty() {
-            for i in 0..out2.len() {
-                let c = out2[i];
+            for (i, &c) in out2.iter().enumerate() {
                 if c == b'\r' {
                     if i == out2.len() - 1 {
                         prop_assert!(status2.state().copied().unwrap(), "out2 ends with CR but status2.ended_with_cr is false");
@@ -75,8 +73,7 @@ proptest! {
         }
 
         // combined must contain only CRLF pairs (no lone CR or lone LF)
-        for i in 0..combined.len() {
-            let c = combined[i];
+        for (i, &c) in combined.iter().enumerate() {
             if c == b'\r' {
                 prop_assert!(i + 1 < combined.len() && combined[i + 1] == b'\n', "found lone CR in combined at {}", i);
             } else if c == b'\n' {
@@ -96,8 +93,7 @@ proptest! {
         }
 
         // out1 must contain only CRLF pairs (no lone CR or lone LF)
-        for i in 0..out1.len() {
-            let c = out1[i];
+        for (i, &c) in out1.iter().enumerate() {
             if c == b'\r' {
                 prop_assert!(i + 1 < out1.len() && out1[i + 1] == b'\n', "found lone CR in out1 at {}", i);
             } else if c == b'\n' {

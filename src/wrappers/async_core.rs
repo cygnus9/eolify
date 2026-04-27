@@ -27,6 +27,8 @@ pub struct ReadBuffer<N: NormalizeChunk> {
 impl<N: NormalizeChunk> ReadBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
+        assert!(buf_size > 0, "buffer size must be greater than zero");
+
         let input_buf = vec![0; buf_size].into_boxed_slice();
         let required = N::max_output_size_for_chunk(buf_size, None, false);
         Self {
@@ -135,6 +137,8 @@ pub enum State {
 impl<N: NormalizeChunk> WriteBuffer<N> {
     #[must_use]
     pub fn new(buf_size: usize) -> Self {
+        assert!(buf_size > 0, "buffer size must be greater than zero");
+
         let input_buf = vec![0; buf_size].into_boxed_slice();
         let required = N::max_output_size_for_chunk(buf_size, None, false);
         Self {
@@ -165,6 +169,9 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
                     .as_mut()
                     .poll_write(cx, &self.output_buf[self.output_pos..self.output_size])
                 {
+                    Poll::Ready(Ok(0)) => {
+                        return Poll::Ready(Err(std::io::ErrorKind::WriteZero.into()));
+                    }
                     Poll::Ready(Ok(n)) => {
                         self.output_pos += n;
                     }
@@ -226,7 +233,7 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
 
                 if self.output_size == 0 {
                     // Nothing more to write
-                    return Poll::Ready(Ok(()));
+                    return inner.as_mut().poll_flush(cx);
                 }
             } else if self.output_pos < self.output_size {
                 // There is still data to write
@@ -234,6 +241,9 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
                     .as_mut()
                     .poll_write(cx, &self.output_buf[self.output_pos..self.output_size])
                 {
+                    Poll::Ready(Ok(0)) => {
+                        return Poll::Ready(Err(std::io::ErrorKind::WriteZero.into()));
+                    }
                     Poll::Ready(Ok(n)) => {
                         self.output_pos += n;
                     }
