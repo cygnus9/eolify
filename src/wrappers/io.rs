@@ -74,11 +74,16 @@ impl<R: Read, N: NormalizeChunk> Reader<R, N> {
 
 impl<R: Read, N: NormalizeChunk> Read for Reader<R, N> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.output_pos >= self.output_size {
-            self.fill_buf()?;
-        }
-        if self.output_size == 0 {
+        if buf.is_empty() {
             return Ok(0);
+        }
+
+        while self.output_pos >= self.output_size {
+            self.fill_buf()?;
+
+            if self.output_size == 0 && self.end_of_stream {
+                return Ok(0);
+            }
         }
 
         let bytes_now = buf.len().min(self.output_size - self.output_pos);

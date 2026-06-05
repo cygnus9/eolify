@@ -41,6 +41,15 @@ dual_test!(crlf_split_across_readers, {
     assert_eq!(out.as_slice(), b"foo\nbar");
 });
 
+dual_test!(crlf_split_across_empty_normalized_chunk_keeps_reading, {
+    let readers = vec![b"foo\r".as_ref(), b"\n".as_ref(), b"bar".as_ref()].into_iter();
+    let test_reader = AsyncTestReader::new(readers);
+    let mut nr = LF::wrap_async_reader_with_buffer_size(test_reader, 4);
+    let mut out = Vec::new();
+    nr.read_to_end(&mut out).await.unwrap();
+    assert_eq!(out.as_slice(), b"foo\nbar");
+});
+
 dual_test!(crlf_split_across_three_reader, {
     let readers = vec![b"\r".as_ref(), b"".as_ref(), b"\n".as_ref()].into_iter();
     let test_reader = AsyncTestReader::new(readers);

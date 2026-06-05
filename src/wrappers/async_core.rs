@@ -45,19 +45,23 @@ impl<N: NormalizeChunk> ReadBuffer<N> {
     pub fn poll_read<R: AsyncReadCompat>(
         &mut self,
         cx: &mut Context<'_>,
-        inner: Pin<&mut R>,
+        mut inner: Pin<&mut R>,
         buf: &mut [u8],
     ) -> Poll<std::io::Result<usize>> {
-        if self.output_pos >= self.output_size {
-            match self.poll_fill_buf(cx, inner) {
+        if buf.is_empty() {
+            return Poll::Ready(Ok(0));
+        }
+
+        while self.output_pos >= self.output_size {
+            match self.poll_fill_buf(cx, inner.as_mut()) {
                 Poll::Ready(Ok(())) => {}
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
                 Poll::Pending => return Poll::Pending,
             }
-        }
 
-        if self.output_size == 0 {
-            return Poll::Ready(Ok(0));
+            if self.output_size == 0 && self.end_of_stream {
+                return Poll::Ready(Ok(0));
+            }
         }
 
         let bytes_now = buf.len().min(self.output_size - self.output_pos);

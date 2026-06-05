@@ -12,6 +12,15 @@ fn crlf_split_across_readers() {
 }
 
 #[test]
+fn crlf_split_across_empty_normalized_chunk_keeps_reading() {
+    let readers = vec![b"foo\r".as_ref(), b"\n".as_ref(), b"bar".as_ref()].into_iter();
+    let test_reader = TestReader::new(readers);
+    let nr = LF::wrap_reader_with_buffer_size(test_reader, 4);
+    let out = read_all(nr);
+    assert_eq!(out, b"foo\nbar".to_vec());
+}
+
+#[test]
 fn crlf_split_across_three_readers() {
     let readers = vec![b"\r".as_ref(), b"".as_ref(), b"\n".as_ref()].into_iter();
     let test_reader = TestReader::new(readers);
