@@ -179,7 +179,18 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
                     Poll::Ready(Ok(n)) => {
                         self.output_pos += n;
                     }
-                    other => return other,
+                    Poll::Ready(Err(e)) => {
+                        if total_bytes > 0 {
+                            return Poll::Ready(Ok(total_bytes));
+                        }
+                        return Poll::Ready(Err(e));
+                    }
+                    Poll::Pending => {
+                        if total_bytes > 0 {
+                            return Poll::Ready(Ok(total_bytes));
+                        }
+                        return Poll::Pending;
+                    }
                 }
             } else {
                 // Output buffer is empty, refill it

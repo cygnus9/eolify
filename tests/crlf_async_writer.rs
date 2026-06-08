@@ -4,7 +4,7 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     },
     task::{Context, Poll},
 };
@@ -12,6 +12,44 @@ use std::{
 struct ZeroWriter;
 
 struct FlushCounterWriter(Arc<AtomicUsize>);
+
+struct PendingAfterPartialWrite {
+    out: Arc<Mutex<Vec<u8>>>,
+    pending_after_writes: usize,
+    write_calls: usize,
+    max_ready_bytes: usize,
+}
+
+impl PendingAfterPartialWrite {
+    fn new(out: Arc<Mutex<Vec<u8>>>) -> Self {
+        Self {
+            out,
+            pending_after_writes: 1,
+            write_calls: 0,
+            max_ready_bytes: 2,
+        }
+    }
+
+    fn poll_write_inner(
+        &mut self,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        if self.write_calls == self.pending_after_writes {
+            self.write_calls += 1;
+            cx.waker().wake_by_ref();
+            return Poll::Pending;
+        }
+
+        self.write_calls += 1;
+        let bytes_now = buf.len().min(self.max_ready_bytes);
+        self.out
+            .lock()
+            .unwrap()
+            .extend_from_slice(&buf[..bytes_now]);
+        Poll::Ready(Ok(bytes_now))
+    }
+}
 
 #[cfg(feature = "futures-io")]
 impl futures_io::AsyncWrite for ZeroWriter {
@@ -52,6 +90,25 @@ impl futures_io::AsyncWrite for FlushCounterWriter {
     }
 }
 
+#[cfg(feature = "futures-io")]
+impl futures_io::AsyncWrite for PendingAfterPartialWrite {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        self.as_mut().get_mut().poll_write_inner(cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
 #[cfg(feature = "tokio")]
 impl tokio::io::AsyncWrite for ZeroWriter {
     fn poll_write(
@@ -83,6 +140,25 @@ impl tokio::io::AsyncWrite for FlushCounterWriter {
 
     fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         self.0.fetch_add(1, Ordering::SeqCst);
+        Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Poll::Ready(Ok(()))
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl tokio::io::AsyncWrite for PendingAfterPartialWrite {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        self.as_mut().get_mut().poll_write_inner(cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 
@@ -171,4 +247,15 @@ dual_test!(flush_reaches_inner_writer_without_pending_output, {
     writer.flush().await.unwrap();
 
     assert_eq!(flushes.load(std::sync::atomic::Ordering::SeqCst), 1);
+});
+
+dual_test!(pending_after_buffered_input_does_not_duplicate_output, {
+    let out = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let inner = super::PendingAfterPartialWrite::new(out.clone());
+    let mut writer = CRLF::wrap_async_writer_with_buffer_size(inner, 4);
+
+    writer.write_all(b"a\nbc").await.unwrap();
+    writer.finish().await.unwrap();
+
+    assert_eq!(*out.lock().unwrap(), b"a\r\nbc".to_vec());
 });
