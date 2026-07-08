@@ -1,0 +1,192 @@
+name: CLI Release
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and validate without publishing crates or uploading release assets"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  BIN_NAME: eolify
+  PACKAGE: eolify-cli
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check tag matches CLI package version
+        if: startsWith(github.ref, 'refs/tags/cli-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#cli-v}"
+          PACKAGE_VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "eolify-cli") | .version')"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version cli-v$TAG_VERSION does not match eolify-cli version $PACKAGE_VERSION"
+            exit 1
+          fi
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Check docs
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
+
+      - name: Run tests
+        run: cargo test --workspace --all-features
+
+      - name: Check library crate version
+        id: eolify-version
+        run: |
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "eolify") | .version')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if cargo search eolify --limit 1 | grep -q "^eolify = \"$VERSION\""; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package library
+        run: cargo package -p eolify
+
+      - name: Package CLI against published library
+        if: steps.eolify-version.outputs.exists == 'true' && github.event_name != 'workflow_dispatch'
+        run: cargo package -p "$PACKAGE"
+
+      - name: Package CLI without registry verification
+        if: steps.eolify-version.outputs.exists == 'false' || github.event_name == 'workflow_dispatch'
+        run: cargo package -p "$PACKAGE" --no-verify
+
+  publish:
+    name: Publish crates to crates.io
+    needs: validate
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/cli-v') && github.event_name != 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check library crate version
+        id: eolify-version
+        run: |
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "eolify") | .version')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if cargo search eolify --limit 1 | grep -q "^eolify = \"$VERSION\""; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish library
+        if: steps.eolify-version.outputs.exists == 'false'
+        run: cargo publish -p eolify --token "$CARGO_REGISTRY_TOKEN"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Wait for library crate index
+        run: |
+          VERSION="${{ steps.eolify-version.outputs.version }}"
+          for attempt in $(seq 1 30); do
+            if cargo search eolify --limit 1 | grep -q "^eolify = \"$VERSION\""; then
+              exit 0
+            fi
+            echo "Waiting for eolify $VERSION to appear in crates.io index (attempt $attempt/30)"
+            sleep 10
+          done
+          echo "Timed out waiting for eolify $VERSION in crates.io index"
+          exit 1
+
+      - name: Publish CLI
+        run: cargo publish -p "$PACKAGE" --token "$CARGO_REGISTRY_TOKEN"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  create-release:
+    name: Create GitHub release
+    needs:
+      - validate
+      - publish
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/cli-v') && github.event_name != 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create release
+        uses: taiki-e/create-gh-release-action@v1
+        with:
+          prefix: cli-v
+          title: $tag
+
+  dry-run-build:
+    name: Dry-run build ${{ matrix.target }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build binary without uploading
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: ${{ env.BIN_NAME }}
+          package: ${{ env.PACKAGE }}
+          target: ${{ matrix.target }}
+          archive: $bin-$target
+          checksum: sha256
+          dry-run: true
+
+  upload-assets:
+    name: Build ${{ matrix.target }}
+    needs:
+      - validate
+      - create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    if: startsWith(github.ref, 'refs/tags/cli-v') && github.event_name != 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build and upload binary
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: ${{ env.BIN_NAME }}
+          package: ${{ env.PACKAGE }}
+          target: ${{ matrix.target }}
+          archive: $bin-$target
+          checksum: sha256
