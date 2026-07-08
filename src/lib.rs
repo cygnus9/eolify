@@ -4,6 +4,9 @@ mod types;
 
 pub use types::{Error, Result};
 
+mod analyze;
+pub use analyze::{analyze_chunk, analyze_reader, AnalyzeState, LineEndingStats};
+
 mod formats;
 pub use formats::{crlf::CRLF, lf::LF, Normalize, NormalizeChunk, NormalizeChunkResult};
 

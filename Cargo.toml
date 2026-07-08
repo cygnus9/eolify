@@ -14,6 +14,9 @@ description = """
 High-performance line ending normalization for Rust.
 """
 
+[workspace]
+members = ["crates/eolify-cli"]
+
 [dependencies]
 futures-io = { version = "0.3.31", optional = true }
 memchr = "2.7"
