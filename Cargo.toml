@@ -1,6 +1,6 @@
 [package]
 name = "eolify"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2021"
 authors = ["Mark Swaanenburg"]
 license = "MIT OR Apache-2.0"
@@ -16,6 +16,7 @@ High-performance line ending normalization for Rust.
 
 [workspace]
 members = ["crates/eolify-cli"]
+exclude = ["fuzz"]
 
 [dependencies]
 futures-io = { version = "0.3.31", optional = true }
