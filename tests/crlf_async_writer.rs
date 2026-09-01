@@ -171,9 +171,11 @@ macro_rules! dual_test {
     ($name:ident, $body:block) => {
         mod $name {
             use eolify::CRLF;
+            use macro_rules_attribute::apply;
+            use smol_macros::test;
 
             #[cfg(feature = "futures-io")]
-            #[async_std::test]
+            #[apply(test!)]
             async fn futures_io() {
                 use eolify::FuturesIoExt;
                 use futures_util::AsyncWriteExt;

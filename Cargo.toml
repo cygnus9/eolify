@@ -25,13 +25,14 @@ pin-project-lite = { version = "0.2.16", optional = true }
 tokio = { version = "1.48.0", default-features = false, optional = true }
 
 [dev-dependencies]
-async-std = { version = "1.12", features = ["attributes"] }
-criterion = "0.7"
+criterion = "0.8.2"
 futures-util = { version = "0.3.31", default-features = false, features = ["io"] }
+macro_rules_attribute = "0.2.3"
 newline-converter = "0.3.0"
 newline_normalizer = "0.1.6"
 proptest = "1.8.0"
 regex = "1.12.2"
+smol-macros = "0.1.1"
 tokio = { version = "1.48.0", default-features = false, features = ["fs", "io-util", "macros", "rt"] }
 
 [[bench]]
