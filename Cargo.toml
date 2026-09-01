@@ -1,6 +1,6 @@
 [package]
 name = "eolify"
-version = "0.4.4"
+version = "0.4.5"
 edition = "2021"
 authors = ["Mark Swaanenburg"]
 license = "MIT OR Apache-2.0"
