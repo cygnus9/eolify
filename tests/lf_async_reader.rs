@@ -10,7 +10,9 @@ macro_rules! dual_test {
         mod $name {
             use super::*;
             use eolify::LF;
+            #[cfg(feature = "futures-io")]
             use macro_rules_attribute::apply;
+            #[cfg(feature = "futures-io")]
             use smol_macros::test;
 
             #[cfg(feature = "futures-io")]

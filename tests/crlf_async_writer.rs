@@ -171,7 +171,9 @@ macro_rules! dual_test {
     ($name:ident, $body:block) => {
         mod $name {
             use eolify::CRLF;
+            #[cfg(feature = "futures-io")]
             use macro_rules_attribute::apply;
+            #[cfg(feature = "futures-io")]
             use smol_macros::test;
 
             #[cfg(feature = "futures-io")]
