@@ -97,7 +97,8 @@ impl<N: NormalizeChunk> ReadBuffer<N> {
 
         let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
-            slice_to_uninit_mut(&mut self.output_buf),
+            // SAFETY: NormalizeChunk never deinitializes existing output bytes.
+            unsafe { slice_to_uninit_mut(&mut self.output_buf) },
             self.state.as_ref(),
             is_last_chunk,
         )
@@ -212,7 +213,8 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
 
                 let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
-                    slice_to_uninit_mut(&mut self.output_buf),
+                    // SAFETY: NormalizeChunk never deinitializes existing output bytes.
+                    unsafe { slice_to_uninit_mut(&mut self.output_buf) },
                     self.state.as_ref(),
                     false,
                 )
@@ -236,7 +238,8 @@ impl<N: NormalizeChunk> WriteBuffer<N> {
                 // Output buffer is empty, try to fill it
                 let status = N::normalize_chunk(
                     &self.input_buf[..self.input_pos],
-                    slice_to_uninit_mut(&mut self.output_buf),
+                    // SAFETY: NormalizeChunk never deinitializes existing output bytes.
+                    unsafe { slice_to_uninit_mut(&mut self.output_buf) },
                     self.state.as_ref(),
                     finish,
                 )

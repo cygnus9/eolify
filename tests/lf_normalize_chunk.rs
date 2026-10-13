@@ -4,7 +4,7 @@ fn run(input: &[u8], preceded_by_cr: bool, is_last_chunk: bool) -> (Vec<u8>, boo
     let mut output = [0; 32];
     let status = LF::normalize_chunk(
         input,
-        slice_to_uninit_mut(&mut output),
+        unsafe { slice_to_uninit_mut(&mut output) },
         Some(&preceded_by_cr),
         is_last_chunk,
     )

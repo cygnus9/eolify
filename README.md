@@ -97,6 +97,24 @@ For `futures-io`, enable the `futures-io` feature and use the equivalent
 
 MIT or Apache-2.0, at your option.
 
+## Custom normalizers and buffer safety
+
+Custom normalizers remain supported. `NormalizeChunk` is an unsafe trait:
+implement it with `unsafe impl` only after auditing every method against its
+documented safety contract. Successful calls must report an initialized prefix
+within the output buffer; existing initialized bytes must stay initialized even
+on error or panic. Whole-buffer normalization must preserve valid UTF-8 so that
+`Normalize::normalize_str` can safely construct a `String`.
+
+This is a source compatibility change for downstream custom implementations.
+Built-in `LF`/`CRLF` normalization and I/O extension methods remain safe to call.
+The public `helpers::vec_to_uninit_mut` and `helpers::slice_to_uninit_mut`
+conversions now require an unsafe block: keep existing bytes initialized for the
+entire borrow, including unwinding. Passing the view directly to a conforming
+normalizer satisfies that obligation. For a vector with existing contents,
+`Vec::spare_capacity_mut` is a safe alternative when only spare capacity is needed;
+it starts after the current length rather than at the beginning of the allocation.
+
 ## Upgrade notes (0.3.x → 0.4.0)
 
 If you are upgrading from `0.3.x` to `0.4.0` there are API changes you

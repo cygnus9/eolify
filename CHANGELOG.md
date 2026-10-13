@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Safety and compatibility
+
+- Make `NormalizeChunk` an unsafe trait with explicit initialization, bounds,
+  initialization-preservation (including errors/panics), and whole-buffer UTF-8
+  guarantees. Custom normalizers remain supported, but require an audited
+  `unsafe impl`; safe implementations are no longer accepted.
+- Make both public buffer-view helpers unsafe: a mutable `MaybeUninit` view of
+  existing bytes can otherwise deinitialize values accessible through safe APIs.
+  Existing low-level callers must preserve initialization and use an unsafe block.
+- Audit synchronous and asynchronous consumers, document built-in implementation
+  safety, fix state documentation, and add compile-fail and initialization tests.
+  Built-in LF/CRLF high-level APIs remain safe to call.
+
 ## [0.4.0] - 2025-12-20
 
 ### Notable (user-facing) changes

@@ -29,7 +29,7 @@ fuzz_target!(|data: &[u8]| {
     match (
         CRLF::normalize_chunk(
             payload,
-            vec_to_uninit_mut(&mut out),
+            unsafe { vec_to_uninit_mut(&mut out) },
             Some(&preceded_by_cr),
             is_last_chunk,
         ),

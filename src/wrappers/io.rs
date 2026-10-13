@@ -56,7 +56,8 @@ impl<R: Read, N: NormalizeChunk> Reader<R, N> {
 
         let status = N::normalize_chunk(
             &self.input_buf[..bytes_read],
-            slice_to_uninit_mut(&mut self.output_buf),
+            // SAFETY: NormalizeChunk never deinitializes existing output bytes.
+            unsafe { slice_to_uninit_mut(&mut self.output_buf) },
             self.state.as_ref(),
             is_last_chunk,
         )
@@ -125,7 +126,8 @@ impl<W: Write, N: NormalizeChunk> Writer<W, N> {
         // Finalize any remaining input
         let status = N::normalize_chunk(
             &this.input_buf[..this.input_pos],
-            slice_to_uninit_mut(&mut this.output_buf),
+            // SAFETY: NormalizeChunk never deinitializes existing output bytes.
+            unsafe { slice_to_uninit_mut(&mut this.output_buf) },
             this.state.as_ref(),
             true, // this is the last chunk
         )
@@ -158,7 +160,8 @@ impl<W: Write, N: NormalizeChunk> Write for Writer<W, N> {
 
             let status = N::normalize_chunk(
                 &self.input_buf,
-                slice_to_uninit_mut(&mut self.output_buf),
+                // SAFETY: NormalizeChunk never deinitializes existing output bytes.
+                unsafe { slice_to_uninit_mut(&mut self.output_buf) },
                 self.state.as_ref(),
                 false,
             )
@@ -175,7 +178,8 @@ impl<W: Write, N: NormalizeChunk> Write for Writer<W, N> {
     fn flush(&mut self) -> std::io::Result<()> {
         let status = N::normalize_chunk(
             &self.input_buf[..self.input_pos],
-            slice_to_uninit_mut(&mut self.output_buf),
+            // SAFETY: NormalizeChunk never deinitializes existing output bytes.
+            unsafe { slice_to_uninit_mut(&mut self.output_buf) },
             self.state.as_ref(),
             false, // flush is not neccesarily the end of stream
         )
