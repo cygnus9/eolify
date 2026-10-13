@@ -101,7 +101,12 @@ fn bench_throughput(c: &mut Criterion) {
                     let mut out = Vec::with_capacity(data.len() * 3 + 8);
                     b.iter(|| {
                         let status = format
-                            .normalize_chunk(data, vec_to_uninit_mut(&mut out), None, false)
+                            .normalize_chunk(
+                                data,
+                                unsafe { vec_to_uninit_mut(&mut out) },
+                                None,
+                                false,
+                            )
                             .unwrap();
                         std::hint::black_box(status.output_len());
                         std::hint::black_box(status.state());
@@ -140,7 +145,7 @@ fn bench_throughput(c: &mut Criterion) {
                             let status = format
                                 .normalize_chunk(
                                     ch,
-                                    vec_to_uninit_mut(&mut out),
+                                    unsafe { vec_to_uninit_mut(&mut out) },
                                     state.as_ref(),
                                     false,
                                 )

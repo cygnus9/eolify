@@ -9,7 +9,10 @@ use crate::{types, NormalizeChunk, NormalizeChunkResult, Result};
 /// Will convert all line endings that are not LF (i.e. CRLF or CR alone) into LF.
 pub struct LF;
 
-impl NormalizeChunk for LF {
+// SAFETY: The capacity check bounds all writes, and each reported output byte
+// is initialized by a copy or an LF write. No bytes are deinitialized, even on
+// error. Replacing/removing only ASCII CR/LF preserves valid UTF-8.
+unsafe impl NormalizeChunk for LF {
     type State = bool;
 
     fn max_output_size_for_chunk(

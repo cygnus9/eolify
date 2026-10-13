@@ -13,7 +13,10 @@ use crate::{
 /// Will convert all line endings that are not CRLF (i.e. LF or CR alone) into CRLF.
 pub struct CRLF;
 
-impl NormalizeChunk for CRLF {
+// SAFETY: The capacity check bounds all writes, and each reported output byte
+// is initialized by a copy or a CR/LF write. No bytes are deinitialized, even on
+// error. Inserting only ASCII CR/LF at newline boundaries preserves valid UTF-8.
+unsafe impl NormalizeChunk for CRLF {
     type State = bool;
 
     fn max_output_size_for_chunk(

@@ -1,18 +1,25 @@
 use std::mem::MaybeUninit;
 
-/// Returns a mutable `MaybeUninit<u8>` view over the full spare allocation of a `Vec<u8>`.
+/// Returns a mutable `MaybeUninit<u8>` view over the full allocation of a `Vec<u8>`.
 ///
 /// The returned slice length is `vec.capacity()`, not `vec.len()`. This is intended for
 /// low-level [`crate::NormalizeChunk`] callers that want to let a normalizer write directly into
 /// a vector's spare capacity and then set the vector length to the reported initialized length.
 ///
-/// # Safety contract for callers
+/// # Safety
 ///
-/// This function itself is safe to call, but it is usually paired with an unsafe
-/// [`Vec::set_len`] call after normalization. Only call `set_len` with a byte count returned by a
-/// successful [`crate::NormalizeChunk::normalize_chunk`] call using this buffer. Reading from the
-/// vector's spare capacity, or setting the vector length beyond the number of initialized bytes,
-/// is undefined behavior.
+/// The caller must keep all bytes in the original `vec[..vec.len()]` initialized,
+/// including when unwinding. Writing `MaybeUninit::uninit()` into an existing
+/// element would violate this requirement. Calling a conforming
+/// [`crate::NormalizeChunk`] implementation preserves initialization.
+///
+/// A later [`Vec::set_len`] must remain within capacity and expose only initialized
+/// bytes. A successful normalizer call initializes its reported output prefix.
+///
+/// ```compile_fail,E0133
+/// let mut bytes = vec![1u8];
+/// eolify::helpers::vec_to_uninit_mut(&mut bytes)[0] = std::mem::MaybeUninit::uninit();
+/// ```
 ///
 /// # Example
 ///
@@ -22,7 +29,7 @@ use std::mem::MaybeUninit;
 /// let input = b"a\nb";
 /// let mut output = Vec::with_capacity(CRLF::max_output_size_for_chunk(input.len(), None, true));
 ///
-/// let status = CRLF::normalize_chunk(input, vec_to_uninit_mut(&mut output), None, true)?;
+/// let status = CRLF::normalize_chunk(input, unsafe { vec_to_uninit_mut(&mut output) }, None, true)?;
 /// unsafe {
 ///     output.set_len(status.output_len());
 /// }
@@ -30,7 +37,9 @@ use std::mem::MaybeUninit;
 /// assert_eq!(output, b"a\r\nb");
 /// # Ok::<(), eolify::Error>(())
 /// ```
-pub fn vec_to_uninit_mut(vec: &mut Vec<u8>) -> &mut [MaybeUninit<u8>] {
+pub unsafe fn vec_to_uninit_mut(vec: &mut Vec<u8>) -> &mut [MaybeUninit<u8>] {
+    // SAFETY: The pointer covers the vector allocation; the caller guarantees
+    // that initialized elements remain initialized throughout this borrow.
     unsafe {
         std::slice::from_raw_parts_mut(vec.as_mut_ptr().cast::<MaybeUninit<u8>>(), vec.capacity())
     }
@@ -46,6 +55,17 @@ pub fn vec_to_uninit_mut(vec: &mut Vec<u8>) -> &mut [MaybeUninit<u8>] {
 /// The bytes may be overwritten by the normalizer. After a successful call, only the first
 /// [`crate::NormalizeChunkResult::output_len`] bytes are part of the normalized output.
 ///
+/// # Safety
+///
+/// The caller must keep the entire original slice initialized, including on
+/// error or panic. A conforming [`crate::NormalizeChunk`] implementation never
+/// deinitializes existing bytes, so it is safe to pass this view to one.
+///
+/// ```compile_fail,E0133
+/// let mut bytes = [1u8];
+/// eolify::helpers::slice_to_uninit_mut(&mut bytes)[0] = std::mem::MaybeUninit::uninit();
+/// ```
+///
 /// # Example
 ///
 /// ```rust
@@ -54,11 +74,13 @@ pub fn vec_to_uninit_mut(vec: &mut Vec<u8>) -> &mut [MaybeUninit<u8>] {
 /// let input = b"a\r\nb";
 /// let mut output = [0; 8];
 ///
-/// let status = LF::normalize_chunk(input, slice_to_uninit_mut(&mut output), None, true)?;
+/// let status = LF::normalize_chunk(input, unsafe { slice_to_uninit_mut(&mut output) }, None, true)?;
 ///
 /// assert_eq!(&output[..status.output_len()], b"a\nb");
 /// # Ok::<(), eolify::Error>(())
 /// ```
-pub fn slice_to_uninit_mut(slice: &mut [u8]) -> &mut [MaybeUninit<u8>] {
+pub unsafe fn slice_to_uninit_mut(slice: &mut [u8]) -> &mut [MaybeUninit<u8>] {
+    // SAFETY: u8 and MaybeUninit<u8> have identical layout. The caller guarantees
+    // the original slice stays initialized throughout this borrow.
     unsafe { &mut *(std::ptr::from_mut::<[u8]>(slice) as *mut [MaybeUninit<u8>]) }
 }

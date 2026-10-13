@@ -11,14 +11,14 @@ proptest! {
 
         // allocate safe upper-bound buffers
         let mut out1 = Vec::with_capacity(a.len() * 2);
-        let status1 = CRLF::normalize_chunk(a, vec_to_uninit_mut(&mut out1), None, false)
+        let status1 = CRLF::normalize_chunk(a, unsafe { vec_to_uninit_mut(&mut out1) }, None, false)
             .expect("output buffer too small for first chunk");
         unsafe {
             out1.set_len(status1.output_len());
         }
 
         let mut out2 = Vec::with_capacity(b.len() * 2 + 1);
-        let status2 = CRLF::normalize_chunk(b, vec_to_uninit_mut(&mut out2), status1.state(), true)
+        let status2 = CRLF::normalize_chunk(b, unsafe { vec_to_uninit_mut(&mut out2) }, status1.state(), true)
             .expect("output buffer too small for second chunk");
         unsafe {
             out2.set_len(status2.output_len());
@@ -86,7 +86,7 @@ proptest! {
     fn normalize_chunk_idempotent(data in vec(any::<u8>(), 0..256)) {
         // First normalization
         let mut out1 = Vec::with_capacity(data.len() * 2 + 1);
-        let status1 = CRLF::normalize_chunk(&data, vec_to_uninit_mut(&mut out1), None, true)
+        let status1 = CRLF::normalize_chunk(&data, unsafe { vec_to_uninit_mut(&mut out1) }, None, true)
             .expect("output buffer too small for first normalization");
         unsafe {
             out1.set_len(status1.output_len());
@@ -103,7 +103,7 @@ proptest! {
 
         // Second normalization
         let mut out2 = Vec::with_capacity(out1.len() * 2 + 1);
-        let status2 = CRLF::normalize_chunk(&out1, vec_to_uninit_mut(&mut out2), None, true)
+        let status2 = CRLF::normalize_chunk(&out1, unsafe { vec_to_uninit_mut(&mut out2) }, None, true)
             .expect("output buffer too small for second normalization");
         unsafe {
             out2.set_len(status2.output_len());
