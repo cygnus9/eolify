@@ -1,4 +1,4 @@
-use std::{mem::MaybeUninit, ptr};
+use core::{mem::MaybeUninit, ptr};
 
 use memchr::memchr2;
 

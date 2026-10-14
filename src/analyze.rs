@@ -1,3 +1,4 @@
+#[cfg(feature = "std")]
 use std::io::{self, Read};
 
 use memchr::memchr2;
@@ -114,6 +115,7 @@ pub fn analyze_chunk(
 }
 
 /// Analyze all bytes read from `reader`.
+#[cfg(feature = "std")]
 pub fn analyze_reader<R: Read>(mut reader: R) -> io::Result<LineEndingStats> {
     let mut buf = [0; 64 * 1024];
     let mut state = AnalyzeState::new();

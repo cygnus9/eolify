@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 use eolify::{analyze_chunk, analyze_reader, AnalyzeState, LineEndingStats};
 
 #[test]

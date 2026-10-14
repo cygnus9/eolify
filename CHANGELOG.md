@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### no_std support
+
+- Add `std` and `alloc` features. The chunk normalization API is available
+  without either feature; whole-buffer `Vec`/`String` APIs require `alloc`.
+- Support `no_std` builds and implement `core::error::Error` (MSRV 1.81).
+
 ### Safety and compatibility
 
 - Make `NormalizeChunk` an unsafe trait with explicit initialization, bounds,

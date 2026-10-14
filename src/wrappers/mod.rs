@@ -1,3 +1,4 @@
+#[cfg(feature = "std")]
 pub(crate) mod io;
 
 #[cfg(any(feature = "futures-io", feature = "tokio"))]

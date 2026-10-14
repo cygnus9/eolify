@@ -1,3 +1,5 @@
+#![cfg(feature = "alloc")]
+
 use eolify::{helpers::vec_to_uninit_mut, NormalizeChunk, CRLF};
 use proptest::{arbitrary::any, collection::vec, prop_assert, proptest, test_runner::Config};
 

@@ -1,9 +1,13 @@
 //! The `formats` module contains the core traits and types for normalization. The actual
 //! formats (like CRLF) are implemented in submodules.
 
-use std::mem::MaybeUninit;
+use core::mem::MaybeUninit;
 
-use crate::{helpers::vec_to_uninit_mut, Result};
+#[cfg(feature = "alloc")]
+use crate::helpers::vec_to_uninit_mut;
+use crate::Result;
+#[cfg(feature = "alloc")]
+use alloc::{string::String, vec::Vec};
 
 pub(crate) mod crlf;
 pub(crate) mod lf;
@@ -41,9 +45,9 @@ impl<S> NormalizeChunkResult<S> {
 
 /// This is the core trait that defines how to normalize a chunk data to a specific format.
 ///
-/// Consumers will typically not use this trait directly, but rather the higher-level
-/// `Normalize` trait. Custom normalizers are supported, but implementing this
-/// trait requires an explicit safety audit.
+/// Consumers can implement this trait to provide custom normalizers. Implementing
+/// it requires an explicit safety audit. The allocating whole-buffer `Normalize`
+/// convenience trait is available when the `alloc` feature is enabled.
 ///
 /// # Safety
 ///
@@ -58,8 +62,8 @@ impl<S> NormalizeChunkResult<S> {
 /// - Never read uninitialized output bytes or access either buffer out of bounds.
 ///   Insufficient space must produce an error rather than an out-of-bounds write.
 /// - With `state = None` and `is_last_chunk = true`, valid UTF-8 input must
-///   produce valid UTF-8 output on success. The blanket `Normalize::normalize_str`
-///   implementation relies on this when constructing a `String`.
+///   produce valid UTF-8 output on success. The allocating whole-buffer API relies
+///   on this when constructing a `String`.
 ///
 /// `max_output_size_for_chunk` must provide enough space for the corresponding
 /// call to succeed. The allocation and I/O consumers rely on the initialized
@@ -117,8 +121,9 @@ pub unsafe trait NormalizeChunk {
     ) -> usize;
 }
 
-/// This is the trait that consumers will typically use to normalize vectors or
-/// string slices to a specific format.
+/// This allocating trait normalizes byte slices and strings to a specific format.
+/// It is available when the `alloc` feature is enabled.
+#[cfg(feature = "alloc")]
 pub trait Normalize {
     /// Normalize the entire input buffer and return a newly allocated `Vec<u8>` with the result.
     #[must_use]
@@ -129,6 +134,7 @@ pub trait Normalize {
     fn normalize_str(input: &str) -> String;
 }
 
+#[cfg(feature = "alloc")]
 impl<N: NormalizeChunk> Normalize for N {
     fn normalize(input: &[u8]) -> Vec<u8> {
         let mut output =

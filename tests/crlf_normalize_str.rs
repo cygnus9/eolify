@@ -1,3 +1,5 @@
+#![cfg(feature = "alloc")]
+
 use eolify::{Normalize, CRLF};
 
 fn run(input: &str) -> String {

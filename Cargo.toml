@@ -2,6 +2,7 @@
 name = "eolify"
 version = "0.4.5"
 edition = "2021"
+rust-version = "1.81"
 authors = ["Mark Swaanenburg"]
 license = "MIT OR Apache-2.0"
 keywords = ["eol", "newline", "line-endings", "crlf", "lf"]
@@ -20,7 +21,7 @@ exclude = ["fuzz"]
 
 [dependencies]
 futures-io = { version = "0.3.31", optional = true }
-memchr = "2.7"
+memchr = { version = "2.7", default-features = false }
 pin-project-lite = { version = "0.2.16", optional = true }
 tokio = { version = "1.48.0", default-features = false, optional = true }
 
@@ -48,8 +49,19 @@ name = "to_dos"
 harness = false
 
 [features]
-futures-io = ["dep:futures-io", "dep:pin-project-lite"]
-tokio = ["dep:tokio", "dep:pin-project-lite"]
+default = ["std"]
+std = ["alloc", "memchr/std"]
+alloc = []
+futures-io = ["std", "dep:futures-io", "dep:pin-project-lite"]
+tokio = ["std", "dep:tokio", "dep:pin-project-lite"]
+
+[[example]]
+name = "normalize_str"
+required-features = ["alloc"]
+
+[[example]]
+name = "sync_file_convert"
+required-features = ["std"]
 
 [[example]]
 name = "tokio_file_convert"
