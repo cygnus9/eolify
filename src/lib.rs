@@ -23,10 +23,10 @@ mod wrappers;
 #[cfg(feature = "std")]
 pub use wrappers::io::{IoExt, ReadExt, WriteExt};
 
-#[cfg(all(feature = "std", feature = "futures-io"))]
+#[cfg(feature = "futures-io")]
 pub use wrappers::futures_io::{FuturesIoAsyncReadExt, FuturesIoAsyncWriteExt, FuturesIoExt};
 
-#[cfg(all(feature = "std", feature = "tokio"))]
+#[cfg(feature = "tokio")]
 pub use wrappers::tokio::{TokioAsyncReadExt, TokioAsyncWriteExt, TokioExt};
 
 pub mod helpers;
