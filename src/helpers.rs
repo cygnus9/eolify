@@ -1,6 +1,6 @@
-use core::{mem::MaybeUninit, ptr, slice};
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+use core::{mem::MaybeUninit, ptr, slice};
 
 /// Returns a mutable `MaybeUninit<u8>` view over the full allocation of a `Vec<u8>`.
 ///
@@ -43,9 +43,7 @@ use alloc::vec::Vec;
 pub unsafe fn vec_to_uninit_mut(vec: &mut Vec<u8>) -> &mut [MaybeUninit<u8>] {
     // SAFETY: The pointer covers the vector allocation; the caller guarantees
     // that initialized elements remain initialized throughout this borrow.
-    unsafe {
-        slice::from_raw_parts_mut(vec.as_mut_ptr().cast::<MaybeUninit<u8>>(), vec.capacity())
-    }
+    unsafe { slice::from_raw_parts_mut(vec.as_mut_ptr().cast::<MaybeUninit<u8>>(), vec.capacity()) }
 }
 
 /// Returns a mutable `MaybeUninit<u8>` view over an initialized byte slice.
