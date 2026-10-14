@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 use std::io::Write;
 
 use eolify::{IoExt, WriteExt, LF};
