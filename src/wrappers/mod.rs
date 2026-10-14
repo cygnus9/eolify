@@ -1,10 +1,11 @@
+#[cfg(feature = "std")]
 pub(crate) mod io;
 
-#[cfg(any(feature = "futures-io", feature = "tokio"))]
+#[cfg(all(feature = "std", any(feature = "futures-io", feature = "tokio")))]
 pub mod async_core;
 
-#[cfg(feature = "futures-io")]
+#[cfg(all(feature = "std", feature = "futures-io"))]
 pub(crate) mod futures_io;
 
-#[cfg(feature = "tokio")]
+#[cfg(all(feature = "std", feature = "tokio"))]
 pub(crate) mod tokio;
