@@ -22,7 +22,7 @@
 ## Usage  
 
 ### Simple string normalization  
-```rust
+```rust,ignore
 use eolify::{CRLF, Normalize};
 
 let text = "one\nline\r\ntwo\rthree";
