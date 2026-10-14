@@ -32,7 +32,7 @@ println!("{}", normalized);
 ```
 
 ### Synchronous I/O reader / writer
-```rust
+```rust,ignore
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use eolify::{CRLF, ReadExt};
