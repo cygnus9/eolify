@@ -93,6 +93,29 @@ async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::R
 For `futures-io`, enable the `futures-io` feature and use the equivalent
 `FuturesIoAsyncReadExt` / `FuturesIoAsyncWriteExt` helpers.
 
+## `no_std` and Cargo features
+
+By default, `eolify` enables the `std` feature, which includes the standard I/O
+adapters, reader analysis, allocation based APIs, and `memchr` runtime CPU
+detection. The `std` feature enables `alloc`.
+
+For chunk normalization without `std` or a heap allocator, disable default
+features:
+
+```toml
+eolify = { version = "0.4", default-features = false }
+```
+
+Enable `alloc` to use whole-buffer `Normalize` methods that return `Vec` or
+`String`; a `no_std` application must provide an allocator for those methods.
+
+```toml
+eolify = { version = "0.4", default-features = false, features = ["alloc"] }
+```
+
+The Tokio and `futures-io` adapters require `std`. The crate requires Rust 1.81
+or newer to implement `core::error::Error` for its error type.
+
 ## License
 
 MIT or Apache-2.0, at your option.
