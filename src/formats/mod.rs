@@ -4,10 +4,10 @@
 use core::mem::MaybeUninit;
 
 #[cfg(feature = "alloc")]
-use alloc::{string::String, vec::Vec};
-#[cfg(feature = "alloc")]
 use crate::helpers::vec_to_uninit_mut;
 use crate::Result;
+#[cfg(feature = "alloc")]
+use alloc::{string::String, vec::Vec};
 
 pub(crate) mod crlf;
 pub(crate) mod lf;
