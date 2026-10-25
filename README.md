@@ -247,7 +247,7 @@ For the 0.3 → 0.4 API changes, see the [migration notes](CHANGELOG.md#migratio
 
 ```toml
 [dependencies]
-eolify = "0.4"
+eolify = "0.5"
 ```
 
 | Feature | Provides |
@@ -260,19 +260,19 @@ eolify = "0.4"
 Enable either or both async integrations as needed:
 
 ```toml
-eolify = { version = "0.4", features = ["tokio", "futures-io"] }
+eolify = { version = "0.5", features = ["tokio", "futures-io"] }
 ```
 
 For chunk normalization without `std` or a heap allocator:
 
 ```toml
-eolify = { version = "0.4", default-features = false }
+eolify = { version = "0.5", default-features = false }
 ```
 
 For in-memory APIs in a `no_std` application with an allocator:
 
 ```toml
-eolify = { version = "0.4", default-features = false, features = ["alloc"] }
+eolify = { version = "0.5", default-features = false, features = ["alloc"] }
 ```
 
 Requires Rust 1.81 or newer. See the [API documentation](https://docs.rs/eolify)
