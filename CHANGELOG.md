@@ -54,5 +54,37 @@ All notable changes to this project will be documented in this file.
 
 ### Migration notes
 
-See the Upgrade section in the README for guidance on porting code that
-used the old chunk API to the new `NormalizeChunk` trait.
+When upgrading from 0.3.x to 0.4, update low-level chunk API callers:
+
+- Replace the old chunk-processing `Normalize` trait with `NormalizeChunk`;
+  `Normalize` now provides allocating whole-buffer convenience methods.
+- Supply a `MaybeUninit<u8>` output buffer and `Option<&Self::State>` instead
+  of `preceded_by_cr: bool`. The associated `State` carries information such
+  as whether the previous input chunk ended with an unpaired CR.
+- Retrieve the next chunk state with `NormalizeChunkResult::state()` instead
+  of the former `ended_with_cr()` boolean.
+- Size each output buffer with
+  `max_output_size_for_chunk(chunk_size, state, is_last_chunk)` before calling
+  `normalize_chunk`. Pass the same state and final-chunk flag to both calls.
+
+For example, a current whole-buffer chunk call is:
+
+```rust
+use eolify::{NormalizeChunk, LF};
+
+fn main() -> eolify::Result<()> {
+    let input = b"one\r\ntwo\r";
+    let capacity = LF::max_output_size_for_chunk(input.len(), None, true);
+    let mut output = Vec::<u8>::with_capacity(capacity);
+    let status = LF::normalize_chunk(input, output.spare_capacity_mut(), None, true)?;
+    // SAFETY: the normalizer initialized this prefix within the allocation.
+    unsafe { output.set_len(status.output_len()); }
+    assert_eq!(output, b"one\ntwo\n");
+    Ok(())
+}
+```
+
+High-level `normalize` and `normalize_str` callers need no changes for this
+refactor. For the additional custom-normalizer and buffer-helper safety
+requirements, see **Safety and compatibility** under Unreleased above and the
+[README safety guidance](README.md#custom-normalizers-and-buffer-safety).

@@ -11,9 +11,7 @@ readme = "README.md"
 documentation = "https://docs.rs/eolify"
 repository = "https://github.com/cygnus9/eolify"
 homepage = "https://github.com/cygnus9/eolify"
-description = """
-High-performance line ending normalization for Rust.
-"""
+description = "Streaming line ending normalization for Rust, with sync and async I/O support."
 
 [workspace]
 members = ["crates/eolify-cli"]
