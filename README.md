@@ -20,7 +20,7 @@ acceleration on supported targets and configurations.
 
 ## Quick Start
 
-With `eolify = "0.4"` in your dependencies, the default features support both examples.
+With `eolify = "0.5"` in your dependencies, the default features support both examples.
 
 ### Streaming
 
