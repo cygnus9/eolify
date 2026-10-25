@@ -1,173 +1,283 @@
-# eolify  
-**High-performance line ending normalization for Rust**  
+# Eolify — Streaming newline normalization for Rust
 
 [![crates.io](https://img.shields.io/crates/v/eolify.svg?color=blue)](https://crates.io/crates/eolify)
 
-`eolify` is a lightweight, allocation-conscious library for normalizing end-of-line (EOL) sequences in large text streams or buffers. It’s designed for high-throughput processing pipelines, data ingestion systems, and cross-platform tooling where consistency and efficiency matter.  
+Convert mixed line endings (LF, CRLF, and CR) to consistent LF or CRLF. Eolify
+integrates with standard Rust I/O, Tokio, and futures-io without loading entire
+files into memory. CR is recognized as an **input** line ending; the supported
+**output** modes are `LF` (`\n`) and `CRLF` (`\r\n`) only.
 
-## Features  
-- Fast and memory-efficient — optimized for bulk text processing.  
-- Normalizes EOLs to a consistent format: CRLF (`\r\n`) or LF (`\n`).
-- Minimal dependencies — ideal for embedding in performance-critical code.  
-- Handles mixed endings (`\n`, `\r\n`, `\r`) gracefully.  
-- Supports:  
-  - Chunk-based API (buffer slices)  
-  - Synchronous implementations of `Read` / `Write`  
-  - Asynchronous implementations of `AsyncRead` / `AsyncWrite` (both `futures_io` and `tokio` supported).
+- **Synchronous streaming:** wrap existing `Read` and `Write` implementations.
+- **Asynchronous streaming:** use Tokio or futures-io readers and writers.
+- **Stateful normalization:** handle newline sequences across chunk boundaries.
+- **Bounded memory:** I/O wrappers process large files and streams using internal
+  buffers whose size does not grow with the input.
+- **In-memory normalization:** normalize strings and byte buffers in one call.
+- **Low-level control:** process chunks in `no_std` environments without allocation.
 
-## Current status  
-- Normalization to CRLF (`\r\n`) is implemented.
-- Normalization to LF (`\n`) is implemented.
+Eolify uses `memchr` for efficient scanning, which can benefit from SIMD
+acceleration on supported targets and configurations.
 
-## Usage  
+## Quick Start
 
-### Simple string normalization  
-```rust,ignore
-use eolify::{CRLF, Normalize};
+With `eolify = "0.4"` in your dependencies, the default features support both examples.
 
-let text = "one\nline\r\ntwo\rthree";
-let normalized = CRLF::normalize_str(text);
-assert_eq!(normalized, "one\r\nline\r\ntwo\r\nthree");
-println!("{}", normalized);
+### Streaming
+
+Wrap an existing reader and copy normalized bytes into your destination:
+
+```rust
+# #[cfg(feature = "std")]
+fn main() -> std::io::Result<()> {
+    use eolify::{IoExt, LF};
+    use std::io;
+
+    let input = &b"one\r\ntwo\rthree\n"[..];
+    let mut reader = LF::wrap_reader(input);
+    let mut output = Vec::new();
+    io::copy(&mut reader, &mut output)?;
+    assert_eq!(output, b"one\ntwo\nthree\n");
+    Ok(())
+}
+# #[cfg(not(feature = "std"))]
+# fn main() {}
 ```
 
-### Synchronous I/O reader / writer
-```rust,ignore
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use eolify::{CRLF, ReadExt};
+The byte slice and `Vec` keep this example self-contained. Replace them with a
+file, socket, or other I/O source and destination to process a stream with bounded
+normalization buffers.
 
-fn normalize_file_sync(input_path: &str, output_path: &str) -> std::io::Result<()> {
-    let infile = File::open(input_path)?;
-    let mut reader = infile.normalize_newlines(CRLF);
+### One-shot
 
-    let outfile = File::create(output_path)?;
-    let mut writer = BufWriter::new(outfile);
+```rust
+# #[cfg(feature = "alloc")]
+fn main() {
+    use eolify::{Normalize, LF};
 
-    std::io::copy(&mut reader, &mut writer)?;
-    writer.flush()?;
+    let text = LF::normalize_str("one\r\ntwo\rthree\n");
+    assert_eq!(text, "one\ntwo\nthree\n");
+}
+# #[cfg(not(feature = "alloc"))]
+# fn main() {}
+```
+
+Use `CRLF` in place of `LF` in either example to select CRLF output.
+
+## Synchronous I/O
+
+`IoExt` provides `LF::wrap_reader()` and `LF::wrap_writer()` (also available on
+`CRLF`). Reader wrappers implement `std::io::Read`, so the streaming Quick Start
+works with an existing `File` or any other reader.
+
+Wrap the destination instead when normalization belongs on the write side:
+
+```rust
+# #[cfg(feature = "std")]
+fn main() -> std::io::Result<()> {
+    use eolify::{IoExt, CRLF};
+    use std::io::Write;
+
+    let mut writer = CRLF::wrap_writer(Vec::new());
+    writer.write_all(b"one\n")?;
+    writer.write_all(b"two\r")?;
+    let output = writer.finish()?;
+    assert_eq!(output, b"one\r\ntwo\r\n");
+    Ok(())
+}
+# #[cfg(not(feature = "std"))]
+# fn main() {}
+```
+
+Call `finish()` to finalize buffered input, including a trailing CR, and recover
+the inner writer. `flush()` alone does not mark the end of the stream. If the
+inner writer is buffered, flush it after `finish()` as needed.
+
+`ReadExt` and `WriteExt` also offer `source.normalize_newlines(LF)` and
+`destination.normalize_newlines(CRLF)`. To choose an internal buffer size, use
+`wrap_reader_with_buffer_size()` or `wrap_writer_with_buffer_size()` with a
+nonzero size. See the [file conversion example](examples/sync_file_convert.rs).
+
+## Asynchronous I/O
+
+### Tokio
+
+Enable Eolify's `tokio` feature and Tokio's `io-util`, `macros`, and `rt` features
+for this example:
+
+```rust
+# #[cfg(feature = "tokio")]
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> std::io::Result<()> {
+    use eolify::{TokioExt, LF};
+    use tokio::io::AsyncWriteExt;
+
+    let mut reader = LF::wrap_async_reader(&b"one\r\ntwo\r"[..]);
+    let mut output = Vec::new();
+    tokio::io::copy(&mut reader, &mut output).await?;
+    assert_eq!(output, b"one\ntwo\n");
+
+    let mut written = Vec::new();
+    let mut writer = LF::wrap_async_writer(&mut written);
+    writer.write_all(b"one\r\ntwo\r").await?;
+    writer.shutdown().await?;
+    drop(writer);
+    assert_eq!(written, b"one\ntwo\n");
+    Ok(())
+}
+# #[cfg(not(feature = "tokio"))]
+# fn main() {}
+```
+
+`shutdown().await` finalizes the normalizer and shuts down the inner writer.
+Alternatively, `finish().await` finalizes and returns the inner writer without
+shutting it down. Use Tokio's `fs` feature for files, as shown in the
+[Tokio file conversion example](examples/tokio_file_convert.rs).
+
+### futures-io
+
+Enable Eolify's `futures-io` feature and add
+`futures-util = { version = "0.3", features = ["io"] }` for the copy and write
+helpers. Run this async function using your executor:
+
+```rust
+# #[cfg(feature = "futures-io")]
+async fn normalize() -> std::io::Result<()> {
+    use eolify::{FuturesIoExt, CRLF};
+    use futures_util::io::{AsyncWriteExt, Cursor};
+
+    let mut reader = CRLF::wrap_async_reader(Cursor::new(b"one\ntwo\r"));
+    let mut output = Cursor::new(Vec::new());
+    futures_util::io::copy(&mut reader, &mut output).await?;
+    assert_eq!(output.into_inner(), b"one\r\ntwo\r\n");
+
+    let mut written = Vec::new();
+    let mut writer = CRLF::wrap_async_writer(Cursor::new(&mut written));
+    writer.write_all(b"one\ntwo\r").await?;
+    writer.close().await?;
+    drop(writer);
+    assert_eq!(written, b"one\r\ntwo\r\n");
+    Ok(())
+}
+# fn main() {
+#     #[cfg(feature = "futures-io")]
+#     tokio::runtime::Builder::new_current_thread().build().unwrap()
+#         .block_on(normalize()).unwrap();
+# }
+```
+
+`close().await` finalizes the normalizer and closes the inner writer;
+`finish().await` returns the finalized inner writer without closing it.
+
+The respective `TokioAsyncReadExt` / `TokioAsyncWriteExt` and
+`FuturesIoAsyncReadExt` / `FuturesIoAsyncWriteExt` traits also provide
+`normalize_newlines()` on existing I/O values. Import the traits for your chosen
+I/O ecosystem to avoid ambiguity when both async features are enabled.
+
+## In-memory normalization
+
+The `Normalize` trait provides `normalize_str(&str) -> String` and
+`normalize(&[u8]) -> Vec<u8>`. These methods allocate the complete output and
+require the `alloc` feature (included by default).
+
+```rust
+# #[cfg(feature = "alloc")]
+fn main() {
+    use eolify::{Normalize, CRLF};
+
+    assert_eq!(CRLF::normalize_str("one\ntwo\r"), "one\r\ntwo\r\n");
+    assert_eq!(CRLF::normalize(b"one\ntwo\r"), b"one\r\ntwo\r\n");
+}
+# #[cfg(not(feature = "alloc"))]
+# fn main() {}
+```
+
+## Advanced usage
+
+### Chunk API and `no_std`
+
+[`NormalizeChunk`](https://docs.rs/eolify/latest/eolify/trait.NormalizeChunk.html)
+works without `std` or allocation. Supply a `MaybeUninit<u8>` output buffer sized
+using `max_output_size_for_chunk(input.len(), state, is_last_chunk)`. Pass the
+previous result's `state()` to the next call and set `is_last_chunk` only at the
+end of the stream. If the stream ends after a nonfinal chunk, finalize with an
+empty input chunk. Only the first `output_len()` bytes of a successful result
+are initialized output.
+
+```rust
+fn main() -> eolify::Result<()> {
+    use core::mem::MaybeUninit;
+    use eolify::{NormalizeChunk, LF};
+
+    let mut output = [MaybeUninit::<u8>::uninit(); 16];
+    let first = LF::normalize_chunk(b"one\r", &mut output, None, false)?;
+    let second = LF::normalize_chunk(b"\ntwo\r", &mut output, first.state(), true)?;
+    assert_eq!(first.output_len() + second.output_len(), b"one\ntwo\n".len());
     Ok(())
 }
 ```
 
-## Why use eolify?
+In a pipeline, consume each initialized output prefix before reusing the buffer.
+See [installation and feature flags](#installation-and-feature-flags) for
+allocation-free and alloc-only configurations.
 
-Working with large text files or streams (logs, ingestion pipelines, cross-platform toolchains) often involves inconsistent line endings (LF, CRLF, CR). Instead of ad-hoc `.replace()` or loading everything into memory, eolify offers a streaming, allocation-conscious approach so you can normalize while reading or writing, without multiple allocations or buffering the entire file.
+### Custom normalizers and buffer safety
 
-## Getting started
+Custom normalizers remain supported. `NormalizeChunk` is an unsafe trait:
+implement it with `unsafe impl` only after auditing every method against its
+[documented safety contract](https://docs.rs/eolify/latest/eolify/trait.NormalizeChunk.html#safety).
+Successful calls must report an initialized prefix within the output buffer;
+never read uninitialized bytes or access buffers out of bounds. Insufficient
+space must return an error, and `max_output_size_for_chunk` must provide enough
+space for the corresponding call. Existing initialized bytes must stay
+initialized even on error or panic. Whole-buffer normalization (no initial
+state, final chunk) must preserve valid UTF-8 so that `Normalize::normalize_str`
+can safely construct a `String`.
 
-Add to your Cargo.toml:
+The public `helpers::vec_to_uninit_mut` and `helpers::slice_to_uninit_mut`
+conversions require an unsafe block: keep existing bytes initialized for the
+entire borrow, including unwinding. Passing the view directly to a conforming
+normalizer satisfies that obligation. For a vector with existing contents,
+`Vec::spare_capacity_mut` is a safe alternative when only spare capacity is needed;
+it starts after the current length rather than at the beginning of the allocation.
+Built-in `LF`/`CRLF` normalization and I/O extension methods remain safe to call.
+
+For the 0.3 → 0.4 API changes, see the [migration notes](CHANGELOG.md#migration-notes).
+
+## Installation and feature flags
 
 ```toml
 [dependencies]
-eolify = { version = "0.4", features = ["tokio"] }
-
-# Alternatively enable the `futures-io` async wrappers instead of `tokio`:
-# eolify = { version = "0.4", features = ["futures-io"] }
+eolify = "0.4"
 ```
 
-Then either call the high-level string routines (for small chunks) or use the I/O wrappers for streaming use-cases.
+| Feature | Provides |
+| --- | --- |
+| `std` (default) | Synchronous I/O adapters, reader analysis, `alloc`, and `memchr` runtime CPU detection |
+| `alloc` | Whole-buffer APIs returning `Vec` or `String` |
+| `tokio` | Tokio async I/O adapters; enables `std` |
+| `futures-io` | futures-io async I/O adapters; enables `std` |
 
-### Asynchronous I/O
+Enable either or both async integrations as needed:
 
-Enable the `tokio` feature (see Cargo snippet above) and use the `TokioAsyncReadExt` / `TokioAsyncWriteExt` helpers:
-
-```nocompile
-use tokio::fs::File;
-use tokio::io::{AsyncWriteExt, BufWriter};
-use eolify::{CRLF, TokioAsyncReadExt};
-
-async fn normalize_file_async(input_path: &str, output_path: &str) -> std::io::Result<()> {
-  let infile = File::open(input_path).await?;
-  let mut reader = infile.normalize_newlines(CRLF);
-
-  let outfile = File::create(output_path).await?;
-  let mut writer = BufWriter::new(outfile);
-
-  tokio::io::copy(&mut reader, &mut writer).await?;
-  writer.shutdown().await?;
-  Ok(())
-}
+```toml
+eolify = { version = "0.4", features = ["tokio", "futures-io"] }
 ```
 
-For `futures-io`, enable the `futures-io` feature and use the equivalent
-`FuturesIoAsyncReadExt` / `FuturesIoAsyncWriteExt` helpers.
-
-## `no_std` and Cargo features
-
-By default, `eolify` enables the `std` feature, which includes the standard I/O
-adapters, reader analysis, allocation based APIs, and `memchr` runtime CPU
-detection. The `std` feature enables `alloc`.
-
-For chunk normalization without `std` or a heap allocator, disable default
-features:
+For chunk normalization without `std` or a heap allocator:
 
 ```toml
 eolify = { version = "0.4", default-features = false }
 ```
 
-Enable `alloc` to use whole-buffer `Normalize` methods that return `Vec` or
-`String`; a `no_std` application must provide an allocator for those methods.
+For in-memory APIs in a `no_std` application with an allocator:
 
 ```toml
 eolify = { version = "0.4", default-features = false, features = ["alloc"] }
 ```
 
-The Tokio and `futures-io` adapters require `std`. The crate requires Rust 1.81
-or newer to implement `core::error::Error` for its error type.
+Requires Rust 1.81 or newer. See the [API documentation](https://docs.rs/eolify)
+for additional methods and types.
 
 ## License
 
 MIT or Apache-2.0, at your option.
-
-## Custom normalizers and buffer safety
-
-Custom normalizers remain supported. `NormalizeChunk` is an unsafe trait:
-implement it with `unsafe impl` only after auditing every method against its
-documented safety contract. Successful calls must report an initialized prefix
-within the output buffer; existing initialized bytes must stay initialized even
-on error or panic. Whole-buffer normalization must preserve valid UTF-8 so that
-`Normalize::normalize_str` can safely construct a `String`.
-
-This is a source compatibility change for downstream custom implementations.
-Built-in `LF`/`CRLF` normalization and I/O extension methods remain safe to call.
-The public `helpers::vec_to_uninit_mut` and `helpers::slice_to_uninit_mut`
-conversions now require an unsafe block: keep existing bytes initialized for the
-entire borrow, including unwinding. Passing the view directly to a conforming
-normalizer satisfies that obligation. For a vector with existing contents,
-`Vec::spare_capacity_mut` is a safe alternative when only spare capacity is needed;
-it starts after the current length rather than at the beginning of the allocation.
-
-## Upgrade notes (0.3.x → 0.4.0)
-
-If you are upgrading from `0.3.x` to `0.4.0` there are API changes you
-need to address if you used the low-level chunked normalization API:
-
-- The old `Normalize` chunk trait was refactored into `NormalizeChunk` and
-  a convenience `Normalize` impl now exists for whole-buffer operations.
-- `normalize_chunk` now takes an output buffer of `MaybeUninit<u8>` and an
-  optional `state: Option<&Self::State>` instead of `preceded_by_cr: bool`.
-  Implementations should use the associated `State` type to track any
-  carried state (e.g. whether the previous chunk ended with `\r`).
-- The result type `NormalizeChunkResult` now returns `state()` to retrieve
-  the next chunk state (previously `ended_with_cr()` boolean).
-- Use `max_output_size_for_chunk(chunk_size, state, is_last_chunk)` to
-  allocate output buffers with proper capacity before calling
-  `normalize_chunk`.
-
-Example migration pattern (pseudo-Rust):
-
-```nocompile
-// old (0.3.x)
-let mut out = vec![0u8; input.len()];
-let status = LF::normalize_chunk(input, &mut out, preceded_by_cr, true)?;
-
-// new (0.4.0)
-let mut out = Vec::with_capacity(Self::max_output_size_for_chunk(input.len(), None, true));
-let status = LF::normalize_chunk(input, vec_to_uninit_mut(&mut out), None, true)?;
-unsafe { out.set_len(status.output_len()); }
-let state = status.state();
-```
-
-If you only used the higher-level `normalize` or `normalize_str` helpers,
-no changes are required.
